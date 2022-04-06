@@ -14,7 +14,6 @@ import java.util.stream.Collectors;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.GlUtil;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.coderbot.iris.gl.IrisRenderSystem;
 import org.lwjgl.opengl.*;
 

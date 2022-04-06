@@ -1,6 +1,8 @@
 package net.coderbot.iris.mixin.fabulous;
 
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.config.IrisConfig;
+
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -29,7 +31,9 @@ public class MixinDisableFabulousGraphics {
 	private void iris$disableFabulousGraphics() {
 		Options options = Minecraft.getInstance().options;
 
-		if (!Iris.getIrisConfig().areShadersEnabled()) {
+		IrisConfig config = Iris.getIrisConfig();
+		
+		if (config != null ? !Iris.getIrisConfig().areShadersEnabled() : false) {
 			// Nothing to do here, shaders are disabled.
 			return;
 		}

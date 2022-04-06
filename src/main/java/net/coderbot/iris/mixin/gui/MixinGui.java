@@ -3,7 +3,6 @@ package net.coderbot.iris.mixin.gui;
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.gui.screen.HudHideable;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.Gui;
@@ -46,8 +45,8 @@ public class MixinGui {
 		Font font = Minecraft.getInstance().font;
 
 		List<String> warningLines = new ArrayList<>();
-		warningLines.add("[Iris] Sodium isn't installed; you will have poor performance.");
-		warningLines.add("[Iris] Install Sodium if you want to run benchmarks or get higher FPS!");
+		warningLines.add("[Oculus] Sodium isn't installed; you will have poor performance.");
+		warningLines.add("[Oculus] Install Sodium if you want to run benchmarks or get higher FPS!");
 
 		for (int i = 0; i < warningLines.size(); ++i) {
 			String string = warningLines.get(i);

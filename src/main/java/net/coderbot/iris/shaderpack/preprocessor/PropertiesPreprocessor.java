@@ -9,7 +9,6 @@ import org.anarres.cpp.Preprocessor;
 import org.anarres.cpp.StringLexerSource;
 import org.anarres.cpp.Token;
 
-import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 import java.util.ArrayList;

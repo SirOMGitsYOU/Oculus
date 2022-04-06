@@ -85,8 +85,8 @@ public abstract class MixinBufferBuilder implements BufferVertexConsumer, BlockS
 		}
 	}
 
-	@Inject(method = "discard()V", at = @At("HEAD"))
-	private void iris$onDiscard(CallbackInfo ci) {
+	@Inject(method = "discard", at = @At("HEAD"))
+	private void iris$onReset(CallbackInfo ci) {
 		extending = false;
 		vertexCount = 0;
 	}
@@ -126,7 +126,7 @@ public abstract class MixinBufferBuilder implements BufferVertexConsumer, BlockS
 		vertexCount = 0;
 
 		// TODO: Keep this in sync with the extensions
-		int extendedDataLength = (2 * 2) + (2 * 4) + (1 * 4);
+		int extendedDataLength = (2 * 2) + (1 * 4) + (1 * 4);
 
 		int stride = this.format.getVertexSize();
 

@@ -1,46 +1,25 @@
-# custom sodium versions
-custom_sodium/
-
-# gradle
-
-.gradle/
-build/
-out/
-classes/
-
-# brachyura
-.brachyura
-*.jfr
-
-# custom sodium
-/custom_sodium/
-
-# idea
-
-.idea/
-*.iml
-*.ipr
-*.iws
-
-# vscode
-
-.settings/
-.vscode/
-bin/
+# eclipse
+bin
+*.launch
+.settings
+.metadata
 .classpath
 .project
 
-# eclipse
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea
 
-*.launch
+# gradle
+build
+.gradle
 
-# fabric
+# other
+eclipse
+run
 
-run/
-/logs/latest.log
-
-# macOS
-
-.DS_Store
-.AppleDouble
-.LSOverride
+# Files from Forge MDK
+forge*changelog.txt

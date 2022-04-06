@@ -4,11 +4,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import it.unimi.dsi.fastutil.booleans.BooleanConsumer;
-import it.unimi.dsi.fastutil.objects.Object2BooleanMap;
-import it.unimi.dsi.fastutil.objects.Object2BooleanMaps;
-import net.coderbot.iris.Iris;
 import net.coderbot.iris.gl.blending.AlphaTest;
-import net.coderbot.iris.gl.blending.BlendMode;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import org.jetbrains.annotations.Nullable;
 
@@ -28,17 +24,6 @@ public class ProgramDirectives {
 	private final BlendModeOverride blendModeOverride;
 	private final ImmutableSet<Integer> mipmappedBuffers;
 	private final ImmutableMap<Integer, Boolean> explicitFlips;
-
-	private ProgramDirectives(int[] drawBuffers, float viewportScale, @Nullable AlphaTest alphaTestOverride,
-							 @Nullable BlendModeOverride blendModeOverride, ImmutableSet<Integer> mipmappedBuffers,
-							 ImmutableMap<Integer, Boolean> explicitFlips) {
-		this.drawBuffers = drawBuffers;
-		this.viewportScale = viewportScale;
-		this.alphaTestOverride = alphaTestOverride;
-		this.blendModeOverride = blendModeOverride;
-		this.mipmappedBuffers = mipmappedBuffers;
-		this.explicitFlips = explicitFlips;
-	}
 
 	ProgramDirectives(ProgramSource source, ShaderProperties properties, Set<Integer> supportedRenderTargets,
 					  @Nullable BlendModeOverride defaultBlendOverride) {
@@ -104,11 +89,6 @@ public class ProgramDirectives {
 		});
 
 		this.mipmappedBuffers = ImmutableSet.copyOf(mipmappedBuffers);
-	}
-
-	public ProgramDirectives withOverriddenDrawBuffers(int[] drawBuffersOverride) {
-		return new ProgramDirectives(drawBuffersOverride, viewportScale, alphaTestOverride, blendModeOverride,
-			mipmappedBuffers, explicitFlips);
 	}
 
 	private static Optional<CommentDirective> findDrawbuffersDirective(Optional<String> stageSource) {

@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 
-@Mixin(DebugScreenOverlay.class)
+@Mixin(value = DebugScreenOverlay.class, priority = 1001)
 public abstract class MixinDebugScreenOverlay {
     @Inject(method = "getGameInformation", at = @At("RETURN"))
     private void batchedentityrendering$appendStats(CallbackInfoReturnable<List<String>> cir) {

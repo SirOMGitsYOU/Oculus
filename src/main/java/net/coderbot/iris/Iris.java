@@ -18,10 +18,9 @@ import java.util.zip.ZipException;
 
 import com.google.common.base.Throwables;
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.brigadier.arguments.BoolArgumentType;
-import net.coderbot.iris.compat.sodium.SodiumVersionCheck;
+
+import net.coderbot.iris.compat.flywheel.FlywheelCompat;
 import net.coderbot.iris.config.IrisConfig;
-import net.coderbot.iris.gl.GLDebug;
 import net.coderbot.iris.gui.screen.ShaderPackScreen;
 import net.coderbot.iris.pipeline.*;
 import net.coderbot.iris.pipeline.newshader.NewWorldRenderingPipeline;
@@ -34,35 +33,36 @@ import net.coderbot.iris.shaderpack.option.Profile;
 import net.coderbot.iris.shaderpack.discovery.ShaderpackDirectoryManager;
 import net.coderbot.iris.shaderpack.option.values.MutableOptionValues;
 import net.coderbot.iris.shaderpack.option.values.OptionValues;
-import net.fabricmc.fabric.api.client.command.v1.ClientCommandManager;
-import net.fabricmc.loader.api.ModContainer;
 import net.irisshaders.iris.api.v0.IrisApi;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.chat.TranslatableComponent;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.dimension.DimensionType;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import net.minecraftforge.client.ClientRegistry;
+import net.minecraftforge.fml.ModList;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLLoader;
+import net.minecraftforge.fml.loading.FMLPaths;
+
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.fabricmc.loader.api.FabricLoader;
 
+@Mod(Iris.MODID)
 public class Iris {
-	public static final String MODID = "iris";
-	public static final IrisLogging logger = new IrisLogging("Iris");
+	public static final String MODID = "oculus";
+	public static final IrisLogging logger = new IrisLogging("Oculus");
 
-	private static Path shaderpacksDirectory;
+	private static Path shaderpacksDirectory = getShaderpacksDirectory();
 	private static ShaderpackDirectoryManager shaderpacksDirectoryManager;
 
 	private static ShaderPack currentPack;
 	private static String currentPackName;
 	private static boolean sodiumInvalid;
-	private static boolean sodiumInstalled;
+	private static boolean sodiumInstalled = FMLLoader.getLoadingModList().getModFileById("rubidium") != null;
 	private static boolean initialized;
 
 	private static PipelineManager pipelineManager;
@@ -80,33 +80,30 @@ public class Iris {
 
 	private static String IRIS_VERSION;
 
-	/**
-	 * Called very early on in Minecraft initialization. At this point we *cannot* safely access OpenGL, but we can do
-	 * some very basic setup, config loading, and environment checks.
-	 *
-	 * <p>This is roughly equivalent to Fabric Loader's ClientModInitializer#onInitializeClient entrypoint, except
-	 * it's entirely cross platform & we get to decide its exact semantics.</p>
-	 *
-	 * <p>This is called right before options are loaded, so we can add key bindings here.</p>
-	 */
-	public void onEarlyInitialize() {
-		FabricLoader.getInstance().getModContainer("sodium").ifPresent(
+	public static boolean flywheelLoaded = false;
+	
+	public Iris() {
+		FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onInitializeClient);
+	}
+	
+	public void onInitializeClient(final FMLClientSetupEvent event) {
+		ModList.get().getModContainerById("rubidium").ifPresent(
 				modContainer -> {
 					sodiumInstalled = true;
-					String versionString = modContainer.getMetadata().getVersion().getFriendlyString();
+					String versionString = modContainer.getModInfo().getVersion().getQualifier();
 
 					// This makes it so that if we don't have the right version of Sodium, it will show the user a
 					// nice warning, and prevent them from playing the game with a wrong version of Sodium.
-					if (!SodiumVersionCheck.isAllowedVersion(versionString)) {
-						sodiumInvalid = true;
-					}
+					//if (!SodiumVersionCheck.isAllowedVersion(versionString)) {
+						sodiumInvalid = false;
+					//}
 				}
 		);
-
-		ModContainer iris = FabricLoader.getInstance().getModContainer(MODID)
-				.orElseThrow(() -> new IllegalStateException("Couldn't find the mod container for Iris"));
-
-		IRIS_VERSION = iris.getMetadata().getVersion().getFriendlyString();
+		
+		IRIS_VERSION = ModList.get().getModContainerById(MODID).get().getModInfo().getVersion().toString();
+		
+		flywheelLoaded = ModList.get().isLoaded("flywheel");
+		FlywheelCompat.disableBackend();
 
 		try {
 			if (!Files.exists(getShaderpacksDirectory())) {
@@ -117,75 +114,40 @@ public class Iris {
 			logger.warn("", e);
 		}
 
-		irisConfig = new IrisConfig(FabricLoader.getInstance().getConfigDir().resolve("iris.properties"));
-
+		irisConfig = new IrisConfig(FMLPaths.CONFIGDIR.get().resolve("oculus.properties"));
+		
 		try {
 			irisConfig.initialize();
 		} catch (IOException e) {
-			logger.error("Failed to initialize Iris configuration, default values will be used instead");
+			logger.error("Failed to initialize Oculus configuration, default values will be used instead");
 			logger.error("", e);
 		}
 
-		reloadKeybind = KeyBindingHelper.registerKeyBinding(new KeyMapping("iris.keybind.reload", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, "iris.keybinds"));
-		toggleShadersKeybind = KeyBindingHelper.registerKeyBinding(new KeyMapping("iris.keybind.toggleShaders", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_K, "iris.keybinds"));
-		shaderpackScreenKeybind = KeyBindingHelper.registerKeyBinding(new KeyMapping("iris.keybind.shaderPackSelection", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_O, "iris.keybinds"));
-
-		setupCommands(Minecraft.getInstance());
+		reloadKeybind = new KeyMapping("iris.keybind.reload", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, "iris.keybinds");
+		ClientRegistry.registerKeyBinding(reloadKeybind);
+		
+		toggleShadersKeybind = new KeyMapping("iris.keybind.toggleShaders", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_K, "iris.keybinds");
+		ClientRegistry.registerKeyBinding(toggleShadersKeybind);
+		
+		shaderpackScreenKeybind = new KeyMapping("iris.keybind.shaderPackSelection", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_O, "iris.keybinds");
+		ClientRegistry.registerKeyBinding(shaderpackScreenKeybind);
 
 		initialized = true;
 	}
 
-	private void setupCommands(Minecraft instance) {
-		ClientCommandManager.DISPATCHER.register(ClientCommandManager.literal("iris").then(ClientCommandManager.literal("debug").then(
-			ClientCommandManager.argument("enabled", BoolArgumentType.bool()).executes(context -> {
-				boolean enable = BoolArgumentType.getBool(context, "enabled");
-
-				Iris.setDebug(enable);
-
-				return 0;
-			})
-		)).then(ClientCommandManager.literal("enabled").then(ClientCommandManager.argument("option", BoolArgumentType.bool()).executes(context -> {
-			try {
-				toggleShaders(instance, BoolArgumentType.getBool(context, "option"));
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
-			return 0;
-		}))).then(ClientCommandManager.literal("reload").executes(context -> {
-			try {
-				reload();
-
-				if (instance.player != null) {
-					instance.player.displayClientMessage(new TranslatableComponent("iris.shaders.reloaded"), false);
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
-				return -1;
-			}
-
-			return 0;
-		})));
-	}
-
-	/**
-	 * Called once RenderSystem#initRenderer has completed. This means that we can safely access OpenGL.
-	 */
 	public static void onRenderSystemInit() {
-		if (!initialized) {
-			Iris.logger.warn("Iris::onRenderSystemInit was called, but Iris::onEarlyInitialize was not called." +
-					" Trying to avoid a crash but this is an odd state.");
+		/*if (!initialized) {
+			Iris.logger.warn("Iris::onRenderSystemInit was called, but Iris::onInitializeClient was not called." +
+					" Is Not Enough Crashes doing something weird? Trying to avoid a crash but this is an odd state.");
 			return;
-		}
-
-		setDebug(irisConfig.isDebugEnabled());
+		}*/
 
 		// Only load the shader pack when we can access OpenGL
 		loadShaderpack();
 	}
 
 	public static void handleKeybinds(Minecraft minecraft) {
-		if (reloadKeybind.consumeClick()) {
+		if (reloadKeybind != null && reloadKeybind.consumeClick()) {
 			try {
 				reload();
 
@@ -194,15 +156,22 @@ public class Iris {
 				}
 
 			} catch (Exception e) {
-				logger.error("Error while reloading Shaders for Iris!", e);
+				logger.error("Error while reloading Shaders for Oculus!", e);
 
 				if (minecraft.player != null) {
 					minecraft.player.displayClientMessage(new TranslatableComponent("iris.shaders.reloaded.failure", Throwables.getRootCause(e).getMessage()).withStyle(ChatFormatting.RED), false);
 				}
 			}
-		} else if (toggleShadersKeybind.consumeClick()) {
+		} else if (toggleShadersKeybind != null && toggleShadersKeybind.consumeClick()) {
+			IrisConfig config = getIrisConfig();
 			try {
-				toggleShaders(minecraft, !irisConfig.areShadersEnabled());
+				config.setShadersEnabled(!config.areShadersEnabled());
+				config.save();
+
+				reload();
+				if (minecraft.player != null) {
+					minecraft.player.displayClientMessage(new TranslatableComponent("iris.shaders.toggled", config.areShadersEnabled() ? currentPackName : "off"), false);
+				}
 			} catch (Exception e) {
 				logger.error("Error while toggling shaders!", e);
 
@@ -213,33 +182,24 @@ public class Iris {
 				setShadersDisabled();
 				currentPackName = "(off) [fallback, check your logs for errors]";
 			}
-		} else if (shaderpackScreenKeybind.consumeClick()) {
+		} else if (shaderpackScreenKeybind != null && shaderpackScreenKeybind.consumeClick()) {
 			minecraft.setScreen(new ShaderPackScreen(null));
-		}
-	}
-
-	public static void toggleShaders(Minecraft minecraft, boolean enabled) throws IOException {
-		irisConfig.setShadersEnabled(enabled);
-		irisConfig.save();
-
-		reload();
-		if (minecraft.player != null) {
-			minecraft.player.displayClientMessage(enabled ? new TranslatableComponent("iris.shaders.toggled", currentPackName) : new TranslatableComponent("iris.shaders.disabled"), false);
 		}
 	}
 
 	public static void loadShaderpack() {
 		if (irisConfig == null) {
-			if (!initialized) {
-				throw new IllegalStateException("Iris::loadShaderpack was called, but Iris::onInitializeClient wasn't" +
+			return;
+			/*if (!initialized) {
+				throw new IllegalStateException("Oculus::loadShaderpack was called, but Iris::onInitializeClient wasn't" +
 						" called yet. How did this happen?");
 			} else {
-				throw new NullPointerException("Iris.irisConfig was null unexpectedly");
-			}
+				throw new NullPointerException("Oculus.oculusConfig was null unexpectedly");
+			}*/
 		}
 
 		if (!irisConfig.areShadersEnabled()) {
-			logger.info("Shaders are disabled because enableShaders is set to false in iris.properties");
+			logger.info("Shaders are disabled because enableShaders is set to false in oculus.properties");
 
 			setShadersDisabled();
 
@@ -387,30 +347,6 @@ public class Iris {
 		currentPackName = "(off)";
 
 		logger.info("Shaders are disabled");
-	}
-
-	private static void setDebug(boolean enable) {
-		int success;
-		if (enable) {
-			success = GLDebug.setupDebugMessageCallback();
-		} else {
-			success = GLDebug.disableDebugMessages();
-		}
-
-		logger.info("Debug functionality is " + (enable ? "enabled, logging will be more verbose!" : "disabled."));
-		if (Minecraft.getInstance().player != null) {
-			Minecraft.getInstance().player.displayClientMessage(new TranslatableComponent(success != 0 ? (enable ? "iris.shaders.debug.enabled" : "iris.shaders.debug.disabled") : "iris.shaders.debug.failure"), false);
-			if (success == 2) {
-				Minecraft.getInstance().player.displayClientMessage(new TranslatableComponent("iris.shaders.debug.restart"), false);
-			}
-		}
-
-		try {
-			irisConfig.setDebugEnabled(enable);
-			irisConfig.save();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 	}
 
 	private static Optional<Properties> tryReadConfigProperties(Path path) {
@@ -667,7 +603,7 @@ public class Iris {
 
 	public static Path getShaderpacksDirectory() {
 		if (shaderpacksDirectory == null) {
-			shaderpacksDirectory = FabricLoader.getInstance().getGameDir().resolve("shaderpacks");
+			shaderpacksDirectory = FMLPaths.GAMEDIR.get().resolve("shaderpacks");
 		}
 
 		return shaderpacksDirectory;
@@ -675,7 +611,7 @@ public class Iris {
 
 	public static ShaderpackDirectoryManager getShaderpacksDirectoryManager() {
 		if (shaderpacksDirectoryManager == null) {
-			shaderpacksDirectoryManager = new ShaderpackDirectoryManager(getShaderpacksDirectory());
+			shaderpacksDirectoryManager = new ShaderpackDirectoryManager(shaderpacksDirectory);
 		}
 
 		return shaderpacksDirectoryManager;

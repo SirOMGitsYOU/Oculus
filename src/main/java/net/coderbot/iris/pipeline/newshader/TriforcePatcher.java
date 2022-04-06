@@ -107,16 +107,16 @@ public class TriforcePatcher {
 		//System.out.println(transformations.toString());
 	}
 
-	public static String patchVanilla(String source, ShaderType type, AlphaTest alpha, boolean hasChunkOffset, ShaderAttributeInputs inputs, boolean hasGeometry) {
+	public static String patchVanilla(String source, ShaderType type, AlphaTest alpha, boolean hasChunkOffset, ShaderAttributeInputs inputs) {
+
 		StringTransformations transformations = new StringTransformations(source);
 
 		patchCommon(transformations, type);
 
 		if (inputs.hasOverlay()) {
 			// TODO: Change this once we implement 1.17 geometry shader support!
-			AttributeShaderTransformer.patch(transformations, type, hasGeometry);
+			AttributeShaderTransformer.patch(transformations, type, false);
 		}
-
 		addAlphaTest(transformations, type, alpha);
 
 		transformations.define("gl_ProjectionMatrix", "iris_ProjMat");

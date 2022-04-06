@@ -3,7 +3,6 @@ package net.coderbot.iris.vertices;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import org.lwjgl.opengl.GL11C;
 
 public class ExtendedBufferBuilder extends BufferBuilder {
 	private VertexFormat originalFormat;

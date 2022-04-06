@@ -1,7 +1,6 @@
 package net.coderbot.batchedentityrendering.mixin;
 
 import net.coderbot.batchedentityrendering.impl.BufferBuilderExt;
-import net.minecraft.util.Mth;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -35,6 +34,14 @@ public class MixinBufferBuilder_SegmentRendering implements BufferBuilderExt {
     @Shadow
     private int totalUploadedBytes;
 
+    private static int roundToward(int p_144942_, int p_144943_) {
+       return positiveCeilDiv(p_144942_, p_144943_) * p_144943_;
+    }
+
+    private static int positiveCeilDiv(int p_184653_, int p_184654_) {
+       return -Math.floorDiv(-p_184653_, p_184654_);
+    }
+    
     @Override
     public void setupBufferSlice(ByteBuffer buffer, BufferBuilder.DrawState parameters) {
         // add the buffer slice
@@ -48,7 +55,7 @@ public class MixinBufferBuilder_SegmentRendering implements BufferBuilderExt {
         this.lastPoppedStateIndex = 0;
 
         // configure the build start (to avoid a warning message) and element offset (probably not important)
-		this.totalRenderedBytes = Mth.roundToward(parameters.bufferSize(), 4);
+		this.totalRenderedBytes = roundToward(parameters.bufferSize(), 4);
 		this.nextElementByte = this.totalRenderedBytes;
 
         // should be zero, just making sure

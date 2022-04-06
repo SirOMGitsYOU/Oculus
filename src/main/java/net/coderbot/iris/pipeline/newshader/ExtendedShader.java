@@ -198,10 +198,10 @@ public class ExtendedShader extends ShaderInstance implements SamplerHolder, Ima
 	}
 
 	@Override
-	public void iris$createGeometryShader(ResourceProvider factory, String name) throws IOException {
-		Resource geometry = factory.getResource(new ResourceLocation("minecraft", name + "_geometry.gsh"));
+	public void iris$createGeometryShader(ResourceProvider factory, ResourceLocation name) throws IOException {
+		Resource geometry = factory.getResource(new ResourceLocation("minecraft", name.getPath() + "_geometry.gsh"));
 		if (geometry != null) {
-			this.geometry = Program.compileShader(IrisProgramTypes.GEOMETRY, name, geometry.getInputStream(), geometry.getSourceName(), new GlslPreprocessor() {
+			this.geometry = Program.compileShader(IrisProgramTypes.GEOMETRY, name.getPath(), geometry.getInputStream(), geometry.getSourceName(), new GlslPreprocessor() {
 				@Nullable
 				@Override
 				public String applyImport(boolean bl, String string) {

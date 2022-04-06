@@ -4,6 +4,7 @@ import net.coderbot.iris.block_rendering.BlockRenderingSettings;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
+
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultedVertexConsumer;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -30,7 +31,7 @@ public abstract class MixinBufferBuilder_SeparateAo extends DefaultedVertexConsu
 
 	@Override
 	public void putBulkData(PoseStack.Pose matrixEntry, BakedQuad quad, float[] brightnesses, float red, float green,
-					 float blue, int[] lights, int overlay, boolean useQuadColorData) {
+			 float blue, int[] lights, int overlay, boolean useQuadColorData) {
 		if (BlockRenderingSettings.INSTANCE.shouldUseSeparateAo()) {
 			this.brightnesses = brightnesses;
 			this.brightnessIndex = 0;
@@ -39,7 +40,7 @@ public abstract class MixinBufferBuilder_SeparateAo extends DefaultedVertexConsu
 			Arrays.fill(brightnesses, 1.0f);
 		}
 
-		super.putBulkData(matrixEntry, quad, brightnesses, red, green, blue, lights, overlay, useQuadColorData);
+		//super.putBulkData(matrixEntry, quad, brightnesses, red, green, blue, lights, overlay, useQuadColorData);
 	}
 
 	@Override

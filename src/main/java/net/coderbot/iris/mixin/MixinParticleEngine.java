@@ -13,6 +13,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.culling.Frustum;
 
 /**
  * Ensures that all particles are rendered with the textured_lit shader program.
@@ -20,19 +21,19 @@ import net.minecraft.client.renderer.MultiBufferSource;
 @Mixin(ParticleEngine.class)
 public class MixinParticleEngine {
 	private static final String RENDER =
-			"Lnet/minecraft/client/particle/ParticleEngine;render(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;Lnet/minecraft/client/renderer/LightTexture;Lnet/minecraft/client/Camera;F)V";
+			"Lnet/minecraft/client/particle/ParticleEngine;render(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;Lnet/minecraft/client/renderer/LightTexture;Lnet/minecraft/client/Camera;FLnet/minecraft/client/renderer/culling/Frustum;)V";
 
-	@Inject(method = RENDER, at = @At("HEAD"))
+	@Inject(method = RENDER, remap = false, at = @At("HEAD"))
 	private void iris$beginDrawingParticles(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource,
-											 LightTexture lightTexture, Camera camera, float f,
+											 LightTexture lightTexture, Camera camera, float f, Frustum frustum,
 											 CallbackInfo ci) {
 		GbufferPrograms.setPhase(WorldRenderingPhase.PARTICLES);
 		GbufferPrograms.push(GbufferProgram.TEXTURED_LIT);
 	}
 
-	@Inject(method = RENDER, at = @At("RETURN"))
+	@Inject(method = RENDER, remap = false, at = @At("RETURN"))
 	private void iris$finishDrawingParticles(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource,
-										LightTexture lightTexture, Camera camera, float f,
+										LightTexture lightTexture, Camera camera, float f, Frustum frustum,
 										CallbackInfo ci) {
 		GbufferPrograms.setPhase(WorldRenderingPhase.NONE);
 		GbufferPrograms.pop(GbufferProgram.TEXTURED_LIT);

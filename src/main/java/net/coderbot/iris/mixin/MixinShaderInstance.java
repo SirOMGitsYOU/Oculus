@@ -3,12 +3,15 @@ package net.coderbot.iris.mixin;
 import com.google.common.collect.ImmutableSet;
 import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.vertex.VertexFormat;
+
 import net.coderbot.iris.gl.IrisRenderSystem;
 import net.coderbot.iris.pipeline.newshader.ExtendedShader;
 import net.coderbot.iris.pipeline.newshader.ShaderInstanceInterface;
 import net.coderbot.iris.pipeline.newshader.fallback.FallbackShader;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceProvider;
+
 import org.lwjgl.opengl.ARBTextureSwizzle;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30C;
@@ -32,8 +35,7 @@ public class MixinShaderInstance implements ShaderInstanceInterface {
 	private static final ImmutableSet<String> ATTRIBUTE_LIST = ImmutableSet.of("Position", "Color", "Normal", "UV0", "UV1", "UV2");
 
 	@Inject(method = "apply",
-			at = @At(value = "INVOKE", target = "com/mojang/blaze3d/systems/RenderSystem.bindTexture (I)V",
-					remap = false),
+			at = @At(value = "INVOKE", target = "com/mojang/blaze3d/systems/RenderSystem.bindTexture (I)V"),
 			locals = LocalCapture.CAPTURE_FAILHARD)
 	private void iris$beforeBindTexture(CallbackInfo ci, int lastActiveTexture, int textureUnit, String samplerName) {
 		// Need to do this here since the LVT changes after the bindTexture call.
@@ -41,8 +43,7 @@ public class MixinShaderInstance implements ShaderInstanceInterface {
 	}
 
 	@Inject(method = "apply",
-			at = @At(value = "INVOKE", target = "com/mojang/blaze3d/systems/RenderSystem.bindTexture (I)V",
-					remap = false, shift = At.Shift.AFTER))
+			at = @At(value = "INVOKE", target = "com/mojang/blaze3d/systems/RenderSystem.bindTexture (I)V", shift = At.Shift.AFTER))
 	private void iris$afterBindTexture(CallbackInfo ci) {
 		final String samplerName = Objects.requireNonNull(lastSamplerName);
 		lastSamplerName = null;
@@ -75,7 +76,7 @@ public class MixinShaderInstance implements ShaderInstanceInterface {
 	}
 
 	@Redirect(method = "updateLocations",
-			at = @At(value = "INVOKE", target = "Lorg/slf4j/Logger;warn(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V", remap = false))
+			at = @At(value = "INVOKE", target = "Lorg/slf4j/Logger;warn(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V"))
 	private void iris$redirectLogSpam(Logger logger, String message, Object arg1, Object arg2) {
 		if (((Object) this) instanceof ExtendedShader || ((Object) this) instanceof FallbackShader) {
 			return;
@@ -84,7 +85,7 @@ public class MixinShaderInstance implements ShaderInstanceInterface {
 		logger.warn(message, arg1, arg2);
 	}
 
-	@Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/shaders/Uniform;glBindAttribLocation(IILjava/lang/CharSequence;)V"))
+	@Redirect(method = "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)V", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/shaders/Uniform;glBindAttribLocation(IILjava/lang/CharSequence;)V"))
 	public void iris$redirectBindAttributeLocation(int i, int j, CharSequence charSequence) {
 		if (((Object) this) instanceof ExtendedShader && ATTRIBUTE_LIST.contains(charSequence)) {
 			Uniform.glBindAttribLocation(i, j, "iris_" + charSequence);
@@ -92,14 +93,19 @@ public class MixinShaderInstance implements ShaderInstanceInterface {
 			Uniform.glBindAttribLocation(i, j, charSequence);
 		}
 	}
-
-	@Inject(method = "<init>", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/GsonHelper;parse(Ljava/io/Reader;)Lcom/google/gson/JsonObject;"))
-	public void iris$setupGeometryShader(ResourceProvider resourceProvider, String string, VertexFormat vertexFormat, CallbackInfo ci) {
-		this.iris$createGeometryShader(resourceProvider, string);
+	
+	@Inject(method = "<init>", at = @At(value = "RETURN"))
+	public void iris$setupGeometryShader(ResourceProvider resourceProvider, String name, VertexFormat vertexFormat, CallbackInfo ci) {
+		this.iris$createGeometryShader(resourceProvider, new ResourceLocation(name));
+	}
+	
+	@Inject(method = "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)V", at = @At(value = "RETURN"))
+	public void oculus$setupGeometryShader(ResourceProvider resourceProvider, ResourceLocation location, VertexFormat vertexFormat, CallbackInfo ci) {
+		this.iris$createGeometryShader(resourceProvider, location);
 	}
 
 	@Override
-	public void iris$createGeometryShader(ResourceProvider provider, String name) {
+	public void iris$createGeometryShader(ResourceProvider provider, ResourceLocation location) {
 		//no-op, used for ExtendedShader to call before the super constructor
 	}
 }

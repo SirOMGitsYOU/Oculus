@@ -2,7 +2,6 @@ package net.coderbot.iris.uniforms;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.coderbot.iris.gl.uniform.DynamicUniformHolder;
-import net.coderbot.iris.gl.uniform.UniformHolder;
 import net.coderbot.iris.vendored.joml.Vector4f;
 
 import static net.coderbot.iris.gl.uniform.UniformUpdateFrequency.PER_FRAME;
