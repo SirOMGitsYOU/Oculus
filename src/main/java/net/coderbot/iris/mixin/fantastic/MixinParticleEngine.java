@@ -7,7 +7,6 @@ import net.coderbot.iris.fantastic.PhasedParticleEngine;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.client.particle.ParticleRenderType;
-
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -15,6 +14,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,9 +74,6 @@ public class MixinParticleEngine implements PhasedParticleEngine {
 	private Map<ParticleRenderType, Queue<Particle>> iris$selectParticlesToRender(ParticleEngine instance) {
 		Map<ParticleRenderType, Queue<Particle>> toRender = new HashMap<>(particles);
 		if (phase == ParticleRenderingPhase.TRANSLUCENT) {
-			// Create a copy of the list
-			//
-			// We re-copy the list every time in case someone has added new particle texture sheets behind our back.
 			// Remove all known opaque particle texture sheets.
 			toRender.remove(OPAQUE_PARTICLE_TEXTURE_SHEETS);
 
@@ -87,10 +84,9 @@ public class MixinParticleEngine implements PhasedParticleEngine {
 			return toRender;
 		} else {
 			// Don't override particle rendering
-			return particles;
+			return toRender;
 		}
 	}
-
 
 	@Override
 	public void setParticleRenderingPhase(ParticleRenderingPhase phase) {

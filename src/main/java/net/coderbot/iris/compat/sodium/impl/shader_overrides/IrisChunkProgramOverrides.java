@@ -6,17 +6,18 @@ import me.jellysquid.mods.sodium.client.model.vertex.type.ChunkVertexType;
 import me.jellysquid.mods.sodium.client.render.chunk.passes.BlockRenderPass;
 import me.jellysquid.mods.sodium.client.render.chunk.shader.ChunkShaderBindingPoints;
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.compat.sodium.impl.IrisChunkShaderBindingPoints;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
 import net.coderbot.iris.pipeline.SodiumTerrainPipeline;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
 import net.coderbot.iris.shadows.ShadowRenderingState;
-import net.coderbot.iris.compat.sodium.impl.IrisChunkShaderBindingPoints;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumMap;
+import java.util.Locale;
 import java.util.Optional;
 
 public class IrisChunkProgramOverrides {
@@ -42,8 +43,8 @@ public class IrisChunkProgramOverrides {
             return null;
         }
 
-
-		return new GlShader(ShaderType.VERTEX, new ResourceLocation("iris", "sodium-terrain.vsh"), source);
+        return new GlShader(ShaderType.VERTEX, new ResourceLocation("iris",
+			"sodium-terrain-" + pass.toString().toLowerCase(Locale.ROOT) + ".vsh"), source);
     }
 
     private GlShader createGeometryShader(IrisTerrainPass pass, SodiumTerrainPipeline pipeline) {
@@ -65,8 +66,8 @@ public class IrisChunkProgramOverrides {
             return null;
         }
 
-        return new GlShader(IrisShaderTypes.GEOMETRY, new ResourceLocation("iris", "sodium-terrain.gsh"),
-				source);
+        return new GlShader(IrisShaderTypes.GEOMETRY, new ResourceLocation("iris",
+			"sodium-terrain-" + pass.toString().toLowerCase(Locale.ROOT) + ".gsh"), source);
     }
 
     private GlShader createFragmentShader(IrisTerrainPass pass, SodiumTerrainPipeline pipeline) {
@@ -92,7 +93,8 @@ public class IrisChunkProgramOverrides {
             return null;
         }
 
-        return new GlShader(ShaderType.FRAGMENT, new ResourceLocation("iris", "sodium-terrain.fsh"), source);
+        return new GlShader(ShaderType.FRAGMENT, new ResourceLocation("iris",
+			"sodium-terrain-" + pass.toString().toLowerCase(Locale.ROOT) + ".fsh"), source);
     }
 
 	private BlendModeOverride getBlendOverride(IrisTerrainPass pass, SodiumTerrainPipeline pipeline) {
@@ -177,13 +179,17 @@ public class IrisChunkProgramOverrides {
 		}
 	}
 
-    private void createShaders(ChunkVertexType vertexType) {
-    	SodiumTerrainPipeline pipeline = getSodiumTerrainPipeline();
+	public void createShaders(SodiumTerrainPipeline pipeline, ChunkVertexType vertexType) {
         Iris.getPipelineManager().clearSodiumShaderReloadNeeded();
 
         if (pipeline != null) {
 			pipeline.patchShaders(vertexType);
-			for (IrisTerrainPass pass : IrisTerrainPass.values()) {
+            for (IrisTerrainPass pass : IrisTerrainPass.values()) {
+				if (pass.isShadow() && !pipeline.hasShadowPass()) {
+					this.programs.put(pass, null);
+					continue;
+				}
+
                 this.programs.put(pass, createShader(pass, pipeline));
             }
         } else {
@@ -199,17 +205,28 @@ public class IrisChunkProgramOverrides {
             deleteShaders();
         }
 
+		WorldRenderingPipeline worldRenderingPipeline = Iris.getPipelineManager().getPipelineNullable();
+		SodiumTerrainPipeline sodiumTerrainPipeline = null;
+
+		if (worldRenderingPipeline != null) {
+			sodiumTerrainPipeline = worldRenderingPipeline.getSodiumTerrainPipeline();
+		}
+
         if (!shadersCreated) {
-			createShaders(vertexType);
+			createShaders(sodiumTerrainPipeline, vertexType);
 		}
 
         if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
-        	if (pass == BlockRenderPass.CUTOUT || pass == BlockRenderPass.CUTOUT_MIPPED) {
+			if (sodiumTerrainPipeline != null && !sodiumTerrainPipeline.hasShadowPass()) {
+				throw new IllegalStateException("Shadow program requested, but the pack does not have a shadow pass?");
+			}
+
+			if (pass == BlockRenderPass.CUTOUT || pass == BlockRenderPass.CUTOUT_MIPPED) {
 				return this.programs.get(IrisTerrainPass.SHADOW_CUTOUT);
 			} else {
 				return this.programs.get(IrisTerrainPass.SHADOW);
 			}
-        } else {
+		} else {
 			if (pass == BlockRenderPass.CUTOUT || pass == BlockRenderPass.CUTOUT_MIPPED) {
 				return this.programs.get(IrisTerrainPass.GBUFFER_CUTOUT);
 			} else if (pass.isTranslucent()) {

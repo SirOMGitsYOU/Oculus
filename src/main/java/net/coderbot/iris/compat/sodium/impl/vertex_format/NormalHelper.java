@@ -120,3 +120,4 @@ public abstract class NormalHelper {
 		saveTo.set(normX, normY, normZ);
 	}
 }
+

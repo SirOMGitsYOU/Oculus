@@ -23,8 +23,8 @@ public class XHFPModelVertexBufferWriterUnsafe extends VertexBufferWriterUnsafe 
     float uSum;
     float vSum;
 
-    private QuadViewTerrain.QuadViewTerrainUnsafe currentQuad = new QuadViewTerrain.QuadViewTerrainUnsafe();
-    private Vector3f normal = new Vector3f();
+    private final QuadViewTerrain.QuadViewTerrainUnsafe currentQuad = new QuadViewTerrain.QuadViewTerrainUnsafe();
+    private final Vector3f normal = new Vector3f();
 
 	@Override
 	public void copyQuadAndFlipNormal() {

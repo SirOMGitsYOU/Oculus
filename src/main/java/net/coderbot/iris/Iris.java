@@ -1,36 +1,22 @@
 package net.coderbot.iris;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystemNotFoundException;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.zip.ZipError;
-import java.util.zip.ZipException;
-
 import com.google.common.base.Throwables;
+import com.mojang.blaze3d.platform.GlDebug;
 import com.mojang.blaze3d.platform.InputConstants;
-
-import net.coderbot.iris.compat.flywheel.FlywheelCompat;
 import net.coderbot.iris.config.IrisConfig;
+import net.coderbot.iris.gl.GLDebug;
 import net.coderbot.iris.gui.screen.ShaderPackScreen;
-import net.coderbot.iris.pipeline.*;
+import net.coderbot.iris.pipeline.FixedFunctionWorldRenderingPipeline;
+import net.coderbot.iris.pipeline.PipelineManager;
+import net.coderbot.iris.pipeline.WorldRenderingPipeline;
 import net.coderbot.iris.pipeline.newshader.NewWorldRenderingPipeline;
 import net.coderbot.iris.shaderpack.DimensionId;
 import net.coderbot.iris.shaderpack.OptionalBoolean;
 import net.coderbot.iris.shaderpack.ProgramSet;
 import net.coderbot.iris.shaderpack.ShaderPack;
+import net.coderbot.iris.shaderpack.discovery.ShaderpackDirectoryManager;
 import net.coderbot.iris.shaderpack.option.OptionSet;
 import net.coderbot.iris.shaderpack.option.Profile;
-import net.coderbot.iris.shaderpack.discovery.ShaderpackDirectoryManager;
 import net.coderbot.iris.shaderpack.option.values.MutableOptionValues;
 import net.coderbot.iris.shaderpack.option.values.OptionValues;
 import net.irisshaders.iris.api.v0.IrisApi;
@@ -51,12 +37,36 @@ import net.minecraftforge.fml.loading.FMLPaths;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystemNotFoundException;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.zip.ZipError;
+import java.util.zip.ZipException;
+
 @Mod(Iris.MODID)
 public class Iris {
 	public static final String MODID = "oculus";
-	public static final IrisLogging logger = new IrisLogging("Oculus");
 
-	private static Path shaderpacksDirectory = getShaderpacksDirectory();
+	/**
+	 * The user-facing name of the mod. Moved into a constant to facilitate
+	 * easy branding changes (for forks). You'll still need to change this
+	 * separately in mixin plugin classes & the language files.
+	 */
+	public static final String MODNAME = "Oculus";
+
+	public static final IrisLogging logger = new IrisLogging(MODNAME);
+
+	private static Path shaderpacksDirectory;
 	private static ShaderpackDirectoryManager shaderpacksDirectoryManager;
 
 	private static ShaderPack currentPack;
@@ -80,31 +90,22 @@ public class Iris {
 
 	private static String IRIS_VERSION;
 
-	public static boolean flywheelLoaded = false;
-	
 	public Iris() {
-		FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onInitializeClient);
+		try {
+			FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onInitializeClient);
+		}catch(Exception e) {}
 	}
 	
-	public void onInitializeClient(final FMLClientSetupEvent event) {
-		ModList.get().getModContainerById("rubidium").ifPresent(
-				modContainer -> {
-					sodiumInstalled = true;
-					String versionString = modContainer.getModInfo().getVersion().getQualifier();
-
-					// This makes it so that if we don't have the right version of Sodium, it will show the user a
-					// nice warning, and prevent them from playing the game with a wrong version of Sodium.
-					//if (!SodiumVersionCheck.isAllowedVersion(versionString)) {
-						sodiumInvalid = false;
-					//}
-				}
-		);
-		
-		IRIS_VERSION = ModList.get().getModContainerById(MODID).get().getModInfo().getVersion().toString();
-		
-		flywheelLoaded = ModList.get().isLoaded("flywheel");
-		FlywheelCompat.disableBackend();
-
+	/**
+	 * Called very early on in Minecraft initialization. At this point we *cannot* safely access OpenGL, but we can do
+	 * some very basic setup, config loading, and environment checks.
+	 *
+	 * <p>This is roughly equivalent to Fabric Loader's ClientModInitializer#onInitializeClient entrypoint, except
+	 * it's entirely cross platform & we get to decide its exact semantics.</p>
+	 *
+	 * <p>This is called right before options are loaded, so we can add key bindings here.</p>
+	 */
+	public void onEarlyInitialize() {
 		try {
 			if (!Files.exists(getShaderpacksDirectory())) {
 				Files.createDirectories(getShaderpacksDirectory());
@@ -115,39 +116,46 @@ public class Iris {
 		}
 
 		irisConfig = new IrisConfig(FMLPaths.CONFIGDIR.get().resolve("oculus.properties"));
-		
+
 		try {
 			irisConfig.initialize();
 		} catch (IOException e) {
-			logger.error("Failed to initialize Oculus configuration, default values will be used instead");
+			logger.error("Failed to initialize Iris configuration, default values will be used instead");
 			logger.error("", e);
 		}
 
 		reloadKeybind = new KeyMapping("iris.keybind.reload", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, "iris.keybinds");
-		ClientRegistry.registerKeyBinding(reloadKeybind);
-		
 		toggleShadersKeybind = new KeyMapping("iris.keybind.toggleShaders", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_K, "iris.keybinds");
-		ClientRegistry.registerKeyBinding(toggleShadersKeybind);
-		
 		shaderpackScreenKeybind = new KeyMapping("iris.keybind.shaderPackSelection", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_O, "iris.keybinds");
-		ClientRegistry.registerKeyBinding(shaderpackScreenKeybind);
 
 		initialized = true;
 	}
+	
+	public void onInitializeClient(final FMLClientSetupEvent event) {
+		IRIS_VERSION = ModList.get().getModContainerById(MODID).get().getModInfo().getVersion().toString();
+		ClientRegistry.registerKeyBinding(reloadKeybind);
+		ClientRegistry.registerKeyBinding(toggleShadersKeybind);
+		ClientRegistry.registerKeyBinding(shaderpackScreenKeybind);
+	}
 
+	/**
+	 * Called once RenderSystem#initRenderer has completed. This means that we can safely access OpenGL.
+	 */
 	public static void onRenderSystemInit() {
-		/*if (!initialized) {
-			Iris.logger.warn("Iris::onRenderSystemInit was called, but Iris::onInitializeClient was not called." +
-					" Is Not Enough Crashes doing something weird? Trying to avoid a crash but this is an odd state.");
+		if (!initialized) {
+			Iris.logger.warn("Iris::onRenderSystemInit was called, but Iris::onEarlyInitialize was not called." +
+					" Trying to avoid a crash but this is an odd state.");
 			return;
-		}*/
+		}
+
+		setDebug(irisConfig.isDebugEnabled());
 
 		// Only load the shader pack when we can access OpenGL
 		loadShaderpack();
 	}
 
 	public static void handleKeybinds(Minecraft minecraft) {
-		if (reloadKeybind != null && reloadKeybind.consumeClick()) {
+		if (reloadKeybind.consumeClick()) {
 			try {
 				reload();
 
@@ -156,22 +164,15 @@ public class Iris {
 				}
 
 			} catch (Exception e) {
-				logger.error("Error while reloading Shaders for Oculus!", e);
+				logger.error("Error while reloading Shaders for Iris!", e);
 
 				if (minecraft.player != null) {
 					minecraft.player.displayClientMessage(new TranslatableComponent("iris.shaders.reloaded.failure", Throwables.getRootCause(e).getMessage()).withStyle(ChatFormatting.RED), false);
 				}
 			}
-		} else if (toggleShadersKeybind != null && toggleShadersKeybind.consumeClick()) {
-			IrisConfig config = getIrisConfig();
+		} else if (toggleShadersKeybind.consumeClick()) {
 			try {
-				config.setShadersEnabled(!config.areShadersEnabled());
-				config.save();
-
-				reload();
-				if (minecraft.player != null) {
-					minecraft.player.displayClientMessage(new TranslatableComponent("iris.shaders.toggled", config.areShadersEnabled() ? currentPackName : "off"), false);
-				}
+				toggleShaders(minecraft, !irisConfig.areShadersEnabled());
 			} catch (Exception e) {
 				logger.error("Error while toggling shaders!", e);
 
@@ -182,24 +183,33 @@ public class Iris {
 				setShadersDisabled();
 				currentPackName = "(off) [fallback, check your logs for errors]";
 			}
-		} else if (shaderpackScreenKeybind != null && shaderpackScreenKeybind.consumeClick()) {
+		} else if (shaderpackScreenKeybind.consumeClick()) {
 			minecraft.setScreen(new ShaderPackScreen(null));
+		}
+	}
+
+	public static void toggleShaders(Minecraft minecraft, boolean enabled) throws IOException {
+		irisConfig.setShadersEnabled(enabled);
+		irisConfig.save();
+
+		reload();
+		if (minecraft.player != null) {
+			minecraft.player.displayClientMessage(enabled ? new TranslatableComponent("iris.shaders.toggled", currentPackName) : new TranslatableComponent("iris.shaders.disabled"), false);
 		}
 	}
 
 	public static void loadShaderpack() {
 		if (irisConfig == null) {
-			return;
-			/*if (!initialized) {
-				throw new IllegalStateException("Oculus::loadShaderpack was called, but Iris::onInitializeClient wasn't" +
+			if (!initialized) {
+				throw new IllegalStateException("Iris::loadShaderpack was called, but Iris::onInitializeClient wasn't" +
 						" called yet. How did this happen?");
 			} else {
-				throw new NullPointerException("Oculus.oculusConfig was null unexpectedly");
-			}*/
+				throw new NullPointerException("Iris.irisConfig was null unexpectedly");
+			}
 		}
 
 		if (!irisConfig.areShadersEnabled()) {
-			logger.info("Shaders are disabled because enableShaders is set to false in oculus.properties");
+			logger.info("Shaders are disabled because enableShaders is set to false in iris.properties");
 
 			setShadersDisabled();
 
@@ -347,6 +357,31 @@ public class Iris {
 		currentPackName = "(off)";
 
 		logger.info("Shaders are disabled");
+	}
+
+	private static void setDebug(boolean enable) {
+		int success;
+		if (enable) {
+			success = GLDebug.setupDebugMessageCallback();
+		} else {
+			GlDebug.enableDebugCallback(Minecraft.getInstance().options.glDebugVerbosity, false);
+			success = 1;
+		}
+
+		logger.info("Debug functionality is " + (enable ? "enabled, logging will be more verbose!" : "disabled."));
+		if (Minecraft.getInstance().player != null) {
+			Minecraft.getInstance().player.displayClientMessage(new TranslatableComponent(success != 0 ? (enable ? "iris.shaders.debug.enabled" : "iris.shaders.debug.disabled") : "iris.shaders.debug.failure"), false);
+			if (success == 2) {
+				Minecraft.getInstance().player.displayClientMessage(new TranslatableComponent("iris.shaders.debug.restart"), false);
+			}
+		}
+
+		try {
+			irisConfig.setDebugEnabled(enable);
+			irisConfig.save();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	private static Optional<Properties> tryReadConfigProperties(Path path) {
@@ -500,7 +535,7 @@ public class Iris {
 		}
 	}
 
-	public static DimensionId lastDimension = DimensionId.OVERWORLD;
+	public static DimensionId lastDimension = null;
 
 	public static DimensionId getCurrentDimension() {
 		ClientLevel level = Minecraft.getInstance().level;
@@ -578,7 +613,7 @@ public class Iris {
 		if (version.endsWith("-development-environment")) {
 			color = ChatFormatting.GOLD;
 			version = version.replace("-development-environment", " (Development Environment)");
-		} else if (version.endsWith("-dirty") || version.contains("unknown")) {
+		} else if (version.endsWith("-dirty") || version.contains("unknown") || version.endsWith("-nogit")) {
 			color = ChatFormatting.RED;
 		} else if (version.contains("+rev.")) {
 			color = ChatFormatting.LIGHT_PURPLE;
@@ -611,7 +646,7 @@ public class Iris {
 
 	public static ShaderpackDirectoryManager getShaderpacksDirectoryManager() {
 		if (shaderpacksDirectoryManager == null) {
-			shaderpacksDirectoryManager = new ShaderpackDirectoryManager(shaderpacksDirectory);
+			shaderpacksDirectoryManager = new ShaderpackDirectoryManager(getShaderpacksDirectory());
 		}
 
 		return shaderpacksDirectoryManager;

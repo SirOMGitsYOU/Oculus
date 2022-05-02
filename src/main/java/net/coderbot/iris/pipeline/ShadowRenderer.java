@@ -8,7 +8,9 @@ import com.mojang.math.Vector3f;
 import net.coderbot.batchedentityrendering.impl.BatchingDebugMessageHelper;
 import net.coderbot.batchedentityrendering.impl.DrawCallTrackingRenderBuffers;
 import net.coderbot.batchedentityrendering.impl.RenderBuffersExt;
+import net.coderbot.iris.Iris;
 import net.coderbot.iris.gl.IrisRenderSystem;
+import net.coderbot.iris.gl.blending.AlphaTestOverride;
 import net.coderbot.iris.gl.blending.BlendModeOverride;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
 import net.coderbot.iris.gl.texture.InternalTextureFormat;
@@ -17,6 +19,8 @@ import net.coderbot.iris.layer.GbufferProgram;
 import net.coderbot.iris.mixin.LevelRendererAccessor;
 import net.coderbot.iris.pipeline.newshader.CoreWorldRenderingPipeline;
 import net.coderbot.iris.rendertarget.RenderTargets;
+import net.coderbot.iris.samplers.IrisImages;
+import net.coderbot.iris.samplers.IrisSamplers;
 import net.coderbot.iris.shaderpack.OptionalBoolean;
 import net.coderbot.iris.shaderpack.PackDirectives;
 import net.coderbot.iris.shaderpack.PackShadowDirectives;
@@ -45,6 +49,7 @@ import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderBuffers;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.core.BlockPos;
@@ -149,10 +154,10 @@ public class ShadowRenderer implements ShadowMapRenderer {
 			// Detect the sun-bounce GI in SEUS Renewed and SEUS v11.
 			// TODO: This is very hacky, we need a better way to detect sun-bounce GI.
 			this.packHasIndirectSunBounceGi = fsh.contains("GI_QUALITY") && fsh.contains("GI_RENDER_RESOLUTION")
-					&& fsh.contains("GI_RADIUS")
-					&& fsh.contains("#define GI\t// Indirect lighting from sunlight.")
-					&& !fsh.contains("//#define GI\t// Indirect lighting from sunlight.")
-					&& !fsh.contains("// #define GI\t// Indirect lighting from sunlight.");
+				&& fsh.contains("GI_RADIUS")
+				&& fsh.contains("#define GI\t// Indirect lighting from sunlight.")
+				&& !fsh.contains("//#define GI\t// Indirect lighting from sunlight.")
+				&& !fsh.contains("// #define GI\t// Indirect lighting from sunlight.");
 		} else {
 			this.packHasIndirectSunBounceGi = false;
 		}
@@ -379,6 +384,10 @@ public class ShadowRenderer implements ShadowMapRenderer {
 		ACTIVE = true;
 		visibleBlockEntities = new ArrayList<>();
 
+		// NB: We store the previous player buffers in order to be able to allow mods rendering entities in the shadow pass (Flywheel) to use the shadow buffers instead.
+		RenderBuffers playerBuffers = levelRenderer.getRenderBuffers();
+		levelRenderer.setRenderBuffers(buffers);
+
 		visibleBlockEntities = new ArrayList<>();
 
 		// Create our camera
@@ -554,11 +563,13 @@ public class ShadowRenderer implements ShadowMapRenderer {
 		Minecraft.getInstance().getMainRenderTarget().bindWrite(false);
 
 		// Restore the old viewport
-		RenderSystem.viewport(0, 0, client.getWindow().getWidth(), client.getWindow().getHeight());
+		RenderSystem.viewport(0, 0, client.getMainRenderTarget().width, client.getMainRenderTarget().height);
 
 		if (levelRenderer instanceof CullingDataCache) {
 			((CullingDataCache) levelRenderer).restoreState();
 		}
+
+		levelRenderer.setRenderBuffers(playerBuffers);
 
 		visibleBlockEntities = null;
 		ACTIVE = false;
@@ -641,17 +652,17 @@ public class ShadowRenderer implements ShadowMapRenderer {
 
 	@Override
 	public void addDebugText(List<String> messages) {
-		messages.add("[Oculus] Shadow Maps: " + debugStringOverall);
-		messages.add("[Oculus] Shadow Distance Terrain: " + terrainFrustumHolder.getDistanceInfo() + " Entity: " + entityFrustumHolder.getDistanceInfo());
-		messages.add("[Oculus] Shadow Culling Terrain: " + terrainFrustumHolder.getCullingInfo() + " Entity: " + entityFrustumHolder.getCullingInfo());
-		messages.add("[Oculus] Shadow Terrain: " + debugStringTerrain
+		messages.add("[" + Iris.MODNAME + "] Shadow Maps: " + debugStringOverall);
+		messages.add("[" + Iris.MODNAME + "] Shadow Distance Terrain: " + terrainFrustumHolder.getDistanceInfo() + " Entity: " + entityFrustumHolder.getDistanceInfo());
+		messages.add("[" + Iris.MODNAME + "] Shadow Culling Terrain: " + terrainFrustumHolder.getCullingInfo() + " Entity: " + entityFrustumHolder.getCullingInfo());
+		messages.add("[" + Iris.MODNAME + "] Shadow Terrain: " + debugStringTerrain
 				+ (shouldRenderTerrain ? "" : " (no terrain) ") + (shouldRenderTranslucent ? "" : "(no translucent)"));
-		messages.add("[Oculus] Shadow Entities: " + getEntitiesDebugString());
-		messages.add("[Oculus] Shadow Block Entities: " + getBlockEntitiesDebugString());
+		messages.add("[" + Iris.MODNAME + "] Shadow Entities: " + getEntitiesDebugString());
+		messages.add("[" + Iris.MODNAME + "] Shadow Block Entities: " + getBlockEntitiesDebugString());
 
 		if (buffers instanceof DrawCallTrackingRenderBuffers && shouldRenderEntities) {
 			DrawCallTrackingRenderBuffers drawCallTracker = (DrawCallTrackingRenderBuffers) buffers;
-			messages.add("[Oculus] Shadow Entity Batching: " + BatchingDebugMessageHelper.getDebugMessage(drawCallTracker));
+			messages.add("[" + Iris.MODNAME + "] Shadow Entity Batching: " + BatchingDebugMessageHelper.getDebugMessage(drawCallTracker));
 		}
 	}
 

@@ -7,6 +7,9 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexBuffer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.coderbot.iris.fantastic.VertexBufferHelper;
+import org.lwjgl.opengl.GL11;
+
+import org.lwjgl.opengl.GL20C;
 
 /**
  * Renders a full-screen textured quad to the screen. Used in composite / deferred rendering.
@@ -52,8 +55,13 @@ public class FullScreenQuadRenderer {
 	}
 
 	public void end() {
+		// NB: No need to clear the buffer state by calling glDisableVertexAttribArray - this VAO will always
+		// have the same format, and buffer state is only associated with a given VAO, so we can keep it bound.
+		//
+		// Using quad.getFormat().clearBufferState() causes some Intel drivers to freak out:
+		// https://github.com/IrisShaders/Iris/issues/1214
+
 		RenderSystem.enableDepthTest();
-		quad.getFormat().clearBufferState();
 		VertexBuffer.unbind();
 		VertexBuffer.unbindVertexArray();
 		((VertexBufferHelper) quad).restoreBinding();

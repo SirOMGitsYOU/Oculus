@@ -105,7 +105,7 @@ public class ShaderPack {
 
 			throw new IOException("Failed to resolve some #include directives, see previous messages for details");
 		}
-		
+
 		this.languageMap = new LanguageMap(root.resolve("lang"));
 
 		// Discover, merge, and apply shader pack options

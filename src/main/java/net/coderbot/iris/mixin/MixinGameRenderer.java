@@ -6,6 +6,7 @@ import com.mojang.blaze3d.shaders.Program;
 import com.mojang.blaze3d.vertex.PoseStack;
 
 import net.coderbot.iris.Iris;
+import net.coderbot.iris.pipeline.FixedFunctionWorldRenderingPipeline;
 import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.pipeline.HandRenderer;
 import net.coderbot.iris.pipeline.ShadowRenderer;
@@ -16,9 +17,6 @@ import net.coderbot.iris.pipeline.newshader.IrisProgramTypes;
 import net.coderbot.iris.pipeline.newshader.ShaderKey;
 
 import net.irisshaders.iris.api.v0.IrisApi;
-
-import java.util.ArrayList;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -35,6 +33,9 @@ import net.minecraft.client.renderer.MultiBufferSource.BufferSource;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.server.packs.resources.ResourceManager;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.ArrayList;
+import java.util.function.Function;
 
 @Mixin(GameRenderer.class)
 public class MixinGameRenderer {
@@ -58,7 +59,7 @@ public class MixinGameRenderer {
 
 		itemInHandRenderer.renderHandsWithItems(tickDelta, poseStack, bufferSource, localPlayer, light);
 	}
-	
+
 	@Redirect(method = "reloadShaders", at = @At(value = "INVOKE", target = "Lcom/google/common/collect/Lists;newArrayList()Ljava/util/ArrayList;"))
 	private ArrayList<Program> iris$reloadGeometryShaders() {
 		ArrayList<Program> programs = Lists.newArrayList();
@@ -73,7 +74,7 @@ public class MixinGameRenderer {
 		if (isSky()) {
 			override(ShaderKey.SKY_BASIC, cir);
 		} else if (ShadowRenderer.ACTIVE) {
-			// TODO: shadowBasic
+			override(ShaderKey.SHADOW_BASIC, cir);
 		} else if (isRenderingWorld()) {
 			override(ShaderKey.BASIC, cir);
 		}
@@ -84,7 +85,7 @@ public class MixinGameRenderer {
 		if (isSky()) {
 			override(ShaderKey.SKY_BASIC_COLOR, cir);
 		} else if (ShadowRenderer.ACTIVE) {
-			// TODO: shadowBasicColor
+			override(ShaderKey.SHADOW_BASIC_COLOR, cir);
 		} else if (isRenderingWorld()) {
 			override(ShaderKey.BASIC_COLOR, cir);
 		}
@@ -97,7 +98,7 @@ public class MixinGameRenderer {
 		if (isSky()) {
 			override(ShaderKey.SKY_TEXTURED, cir);
 		} else if (ShadowRenderer.ACTIVE) {
-			// TODO: shadowTextured
+			override(ShaderKey.SHADOW_TEX, cir);
 		} else if (isRenderingWorld()) {
 			override(ShaderKey.TEXTURED, cir);
 		}
@@ -108,7 +109,7 @@ public class MixinGameRenderer {
 		if (isSky()) {
 			override(ShaderKey.SKY_TEXTURED_COLOR, cir);
 		} else if (ShadowRenderer.ACTIVE) {
-			// TODO: shadowTexturedColor
+			override(ShaderKey.SHADOW_TEX_COLOR, cir);
 		} else if (isRenderingWorld()) {
 			override(ShaderKey.TEXTURED_COLOR, cir);
 		}
@@ -136,18 +137,22 @@ public class MixinGameRenderer {
 	private static void iris$overrideParticleShader(CallbackInfoReturnable<ShaderInstance> cir) {
 		if(isPhase(WorldRenderingPhase.RAIN_SNOW)) {
 			override(ShaderKey.WEATHER, cir);
-		} else if (isRenderingWorld() && !ShadowRenderer.ACTIVE) {
+		} else if (ShadowRenderer.ACTIVE) {
+			override(ShaderKey.SHADOW_PARTICLES, cir);
+		} else if (isRenderingWorld()) {
 			override(ShaderKey.PARTICLES, cir);
 		}
-		// TODO: shadows
 	}
 
 	// TODO: getPositionColorLightmapShader, getPositionColorTexLightmapShader
 
 	@Inject(method = "getPositionTexColorNormalShader", at = @At("HEAD"), cancellable = true)
 	private static void iris$overridePositionTexColorNormalShader(CallbackInfoReturnable<ShaderInstance> cir) {
-		override(ShaderKey.CLOUDS, cir);
-		// TODO: shadows
+		if (ShadowRenderer.ACTIVE) {
+			override(ShaderKey.SHADOW_CLOUDS, cir);
+		} else {
+			override(ShaderKey.CLOUDS, cir);
+		}
 	}
 
 	// TODO: getPositionTexLightmapColorShader
@@ -295,7 +300,7 @@ public class MixinGameRenderer {
 	private static void iris$overrideBeaconBeamShader(CallbackInfoReturnable<ShaderInstance> cir) {
 		if (ShadowRenderer.ACTIVE) {
 			override(ShaderKey.SHADOW_BEACON_BEAM, cir);
-		} else {
+		} else if (isRenderingWorld()) {
 			override(ShaderKey.BEACON, cir);
 		}
 	}
@@ -324,9 +329,7 @@ public class MixinGameRenderer {
 	}, at = @At("HEAD"), cancellable = true)
 	private static void iris$overrideLeashShader(CallbackInfoReturnable<ShaderInstance> cir) {
 		if (ShadowRenderer.ACTIVE) {
-			// TODO: Wrong program
-			// override(CoreWorldRenderingPipeline::getShadowTerrainCutout, cir);
-			return;
+			override(ShaderKey.SHADOW_LEASH, cir);
 		} else if (isRenderingWorld()) {
 			override(ShaderKey.LEASH, cir);
 		}
@@ -337,9 +340,7 @@ public class MixinGameRenderer {
 	}, at = @At("HEAD"), cancellable = true)
 	private static void iris$overrideLightningShader(CallbackInfoReturnable<ShaderInstance> cir) {
 		if (ShadowRenderer.ACTIVE) {
-			// TODO: Wrong program
-			// override(CoreWorldRenderingPipeline::getShadowTerrainCutout, cir);
-			return;
+			override(ShaderKey.SHADOW_LIGHTNING, cir);
 		} else if (isRenderingWorld()) {
 			override(ShaderKey.LIGHTNING, cir);
 		}
@@ -359,7 +360,9 @@ public class MixinGameRenderer {
 			"getRendertypeTextSeeThroughShader"
 	}, at = @At("HEAD"), cancellable = true)
 	private static void iris$overrideTextShader(CallbackInfoReturnable<ShaderInstance> cir) {
-		if (isRenderingWorld() && !ShadowRenderer.ACTIVE) {
+		if (ShadowRenderer.ACTIVE) {
+			override(ShaderKey.SHADOW_TEXT, cir);
+		} else if (isRenderingWorld()) {
 			override(ShaderKey.TEXT, cir);
 		}
 	}
@@ -369,7 +372,9 @@ public class MixinGameRenderer {
 			"getRendertypeTextIntensitySeeThroughShader"
 	}, at = @At("HEAD"), cancellable = true)
 	private static void iris$overrideTextIntensityShader(CallbackInfoReturnable<ShaderInstance> cir) {
-		if (isRenderingWorld() && !ShadowRenderer.ACTIVE) {
+		if (ShadowRenderer.ACTIVE) {
+			override(ShaderKey.SHADOW_TEXT_INTENSITY, cir);
+		} else if (isRenderingWorld()) {
 			override(ShaderKey.TEXT_INTENSITY, cir);
 		}
 	}

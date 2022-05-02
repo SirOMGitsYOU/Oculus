@@ -1,16 +1,19 @@
 package net.coderbot.iris.rendertarget;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
 import com.google.common.collect.ImmutableSet;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
 import net.coderbot.iris.shaderpack.PackRenderTargetDirectives;
+import net.minecraft.client.Minecraft;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.function.IntSupplier;
 
 public class RenderTargets {
 	private final RenderTarget[] targets;
-	private final DepthTexture depthTexture;
+	private int currentDepthTexture;
+
 	private final DepthTexture noTranslucents;
 	private final DepthTexture noHand;
 
@@ -23,20 +26,22 @@ public class RenderTargets {
 	private boolean destroyed = false;
 
 	public RenderTargets(com.mojang.blaze3d.pipeline.RenderTarget reference, PackRenderTargetDirectives directives) {
-		this(reference.width, reference.height, directives.getRenderTargetSettings());
+		// Do not use an IntSupplier to refer to the RenderTarget, it's not safe to assume the main target is always the same.
+		this(reference.width, reference.height, reference.getDepthTextureId(), directives.getRenderTargetSettings());
 	}
 
-	public RenderTargets(int width, int height, Map<Integer, PackRenderTargetDirectives.RenderTargetSettings> renderTargets) {
+	public RenderTargets(int width, int height, int depthTexture, Map<Integer, PackRenderTargetDirectives.RenderTargetSettings> renderTargets) {
 		targets = new RenderTarget[renderTargets.size()];
 
 		renderTargets.forEach((index, settings) -> {
 			// TODO: Handle mipmapping?
-			targets[index] = net.coderbot.iris.rendertarget.RenderTarget.builder().setDimensions(width, height)
+			targets[index] = RenderTarget.builder().setDimensions(width, height)
 					.setInternalFormat(settings.getInternalFormat())
 					.setPixelFormat(settings.getInternalFormat().getPixelFormat()).build();
 		});
 
-		this.depthTexture = new DepthTexture(width, height);
+		this.currentDepthTexture = depthTexture;
+
 		this.noTranslucents = new DepthTexture(width, height);
 		this.noHand = new DepthTexture(width, height);
 
@@ -57,11 +62,10 @@ public class RenderTargets {
 			owned.destroy();
 		}
 
-		for (net.coderbot.iris.rendertarget.RenderTarget target : targets) {
+		for (RenderTarget target : targets) {
 			target.destroy();
 		}
 
-		depthTexture.destroy();
 		noTranslucents.destroy();
 		noHand.destroy();
 	}
@@ -70,7 +74,7 @@ public class RenderTargets {
 		return targets.length;
 	}
 
-	public net.coderbot.iris.rendertarget.RenderTarget get(int index) {
+	public RenderTarget get(int index) {
 		if (destroyed) {
 			throw new IllegalStateException("Tried to use destroyed RenderTargets");
 		}
@@ -78,12 +82,8 @@ public class RenderTargets {
 		return targets[index];
 	}
 
-	public DepthTexture getDepthTexture() {
-		if (destroyed) {
-			throw new IllegalStateException("Tried to use destroyed RenderTargets");
-		}
-
-		return depthTexture;
+	public int getDepthTexture() {
+		return currentDepthTexture;
 	}
 
 	public DepthTexture getDepthTextureNoTranslucents() {
@@ -98,7 +98,22 @@ public class RenderTargets {
 		return noHand;
 	}
 
-	public void resizeIfNeeded(int newWidth, int newHeight) {
+	public void resizeIfNeeded(boolean recreateDepth, int newDepthTextureId, int newWidth, int newHeight) {
+		if (recreateDepth || newDepthTextureId != currentDepthTexture) {
+			// Re-attach the depth textures with the new depth texture ID, since Minecraft re-creates
+			// the depth texture when resizing its render targets.
+			//
+			// I'm not sure if our framebuffers holding on to the old depth texture between frames
+			// could be a concern, in the case of resizing and similar. I think it should work
+			// based on what I've seen of the spec, though - it seems like deleting a texture
+			// automatically detaches it from its framebuffers.
+			currentDepthTexture = newDepthTextureId;
+
+			for (GlFramebuffer framebuffer : ownedFramebuffers) {
+				framebuffer.addDepthAttachment(newDepthTextureId);
+			}
+		}
+
 		if (newWidth == cachedWidth && newHeight == cachedHeight) {
 			// No resize needed
 			return;
@@ -107,11 +122,10 @@ public class RenderTargets {
 		cachedWidth = newWidth;
 		cachedHeight = newHeight;
 
-		for (net.coderbot.iris.rendertarget.RenderTarget target : targets) {
+		for (RenderTarget target : targets) {
 			target.resize(newWidth, newHeight);
 		}
 
-		depthTexture.resize(newWidth, newHeight);
 		noTranslucents.resize(newWidth, newHeight);
 		noHand.resize(newWidth, newHeight);
 
@@ -155,7 +169,7 @@ public class RenderTargets {
 
 		GlFramebuffer framebuffer =  createColorFramebuffer(stageWritesToMain, drawBuffers);
 
-		framebuffer.addDepthAttachment(this.getDepthTexture().getTextureId());
+		framebuffer.addDepthAttachment(currentDepthTexture);
 
 		return framebuffer;
 	}
@@ -177,7 +191,7 @@ public class RenderTargets {
 	public GlFramebuffer createColorFramebufferWithDepth(ImmutableSet<Integer> stageWritesToMain, int[] drawBuffers) {
 		GlFramebuffer framebuffer = createColorFramebuffer(stageWritesToMain, drawBuffers);
 
-		framebuffer.addDepthAttachment(this.getDepthTexture().getTextureId());
+		framebuffer.addDepthAttachment(currentDepthTexture);
 
 		return framebuffer;
 	}
@@ -201,7 +215,7 @@ public class RenderTargets {
 						+ getRenderTargetCount() + " render targets are supported.");
 			}
 
-			net.coderbot.iris.rendertarget.RenderTarget target = this.get(drawBuffers[i]);
+			RenderTarget target = this.get(drawBuffers[i]);
 
 			int textureId = stageWritesToMain.contains(drawBuffers[i]) ? target.getMainTexture() : target.getAltTexture();
 

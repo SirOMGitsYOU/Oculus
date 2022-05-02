@@ -25,6 +25,7 @@ import net.coderbot.iris.postprocess.BufferFlipper;
 import net.coderbot.iris.postprocess.CenterDepthSampler;
 import net.coderbot.iris.postprocess.CompositeRenderer;
 import net.coderbot.iris.postprocess.FinalPassRenderer;
+import net.coderbot.iris.rendertarget.Blaze3dRenderTargetExt;
 import net.coderbot.iris.rendertarget.RenderTargets;
 import net.coderbot.iris.samplers.IrisImages;
 import net.coderbot.iris.samplers.IrisSamplers;
@@ -201,13 +202,13 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline {
 
 		createShadowMapRenderer = () -> {
 			shadowMapRenderer = new ShadowRenderer((CoreWorldRenderingPipeline) this, programs,
-					programs.getPackDirectives(), renderTargets);
+				programs.getPackDirectives(), renderTargets);
 			createShadowMapRenderer = () -> {};
 		};
 
 		BufferFlipper flipper = new BufferFlipper();
 
-		this.centerDepthSampler = new CenterDepthSampler(renderTargets, updateNotifier);
+		this.centerDepthSampler = new CenterDepthSampler(renderTargets);
 
 		Supplier<ShadowMapRenderer> shadowMapRendererSupplier = () -> {
 			createShadowMapRenderer.run();
@@ -340,7 +341,7 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline {
 		this.phase = WorldRenderingPhase.NONE;
 
 		this.sodiumTerrainPipeline = new SodiumTerrainPipeline(this, programs, createTerrainSamplers,
-				createShadowTerrainSamplers, createTerrainImages, createShadowTerrainImages, renderTargets, flippedAfterPrepare, flippedAfterTranslucent,
+			shadowMapRenderer instanceof EmptyShadowMapRenderer || shadowMapRenderer == null ? null : createShadowTerrainSamplers, createTerrainImages, createShadowTerrainImages, renderTargets, flippedAfterPrepare, flippedAfterTranslucent,
 				shadowMapRenderer instanceof ShadowRenderer ? ((ShadowRenderer) shadowMapRenderer).getFramebuffer() :
 						null);
 	}
@@ -751,7 +752,11 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline {
 		RenderSystem.activeTexture(GL15C.GL_TEXTURE0);
 
 		RenderTarget main = Minecraft.getInstance().getMainRenderTarget();
-		renderTargets.resizeIfNeeded(main.width, main.height);
+		Blaze3dRenderTargetExt mainExt = (Blaze3dRenderTargetExt) main;
+
+		renderTargets.resizeIfNeeded(mainExt.iris$isDepthBufferDirty(), main.getDepthTextureId(), main.width, main.height);
+
+		mainExt.iris$clearDepthBufferDirtyFlag();
 
 		final ImmutableList<ClearPass> passes;
 
@@ -793,6 +798,8 @@ public class DeferredWorldRenderingPipeline implements WorldRenderingPipeline {
 		GlStateManager._bindTexture(renderTargets.getDepthTextureNoTranslucents().getTextureId());
 		IrisRenderSystem.copyTexImage2D(GL20C.GL_TEXTURE_2D, 0, GL20C.GL_DEPTH_COMPONENT, 0, 0, renderTargets.getCurrentWidth(), renderTargets.getCurrentHeight(), 0);
 		GlStateManager._bindTexture(0);
+
+		centerDepthSampler.updateSample();
 
 		deferredRenderer.renderAll();
 		Program.unbind();

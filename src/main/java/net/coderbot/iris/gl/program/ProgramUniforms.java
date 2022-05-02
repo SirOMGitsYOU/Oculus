@@ -1,13 +1,5 @@
 package net.coderbot.iris.gl.program;
 
-import java.nio.IntBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.OptionalInt;
-
 import com.google.common.collect.ImmutableList;
 import com.mojang.blaze3d.platform.GlStateManager;
 import net.coderbot.iris.Iris;
@@ -23,6 +15,14 @@ import net.minecraft.client.Minecraft;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.ARBShaderImageLoadStore;
 import org.lwjgl.opengl.GL20C;
+
+import java.nio.IntBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalInt;
 
 public class ProgramUniforms {
 	private static ProgramUniforms active;
@@ -364,7 +364,7 @@ public class ProgramUniforms {
 				|| type == GL20C.GL_SAMPLER_1D_SHADOW
 				|| type == GL20C.GL_SAMPLER_2D_SHADOW;
 	}
-	
+
 	private static boolean isImage(int type) {
 		return type == ARBShaderImageLoadStore.GL_IMAGE_1D
 			|| type == ARBShaderImageLoadStore.GL_IMAGE_2D

@@ -5,10 +5,9 @@ import me.jellysquid.mods.sodium.client.render.SodiumWorldRenderer;
 import me.jellysquid.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.coderbot.iris.shadows.ShadowRenderingState;
 import net.coderbot.iris.compat.sodium.impl.shadow_map.SwappableRenderSectionManager;
-import net.coderbot.iris.pipeline.ShadowRenderer;
 import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.RenderType;
-
+import net.minecraft.client.renderer.culling.Frustum;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -29,41 +28,60 @@ public class MixinSodiumWorldRenderer {
     @Shadow(remap = false)
     private RenderSectionManager renderSectionManager;
 
-    @Shadow(remap = false)
-    private double lastCameraX;
-
     @Unique
     private boolean wasRenderingShadows = false;
 
-    @Unique
-    public void iris$restoreStateIfShadowsWereBeingRendered() {
-        if (wasRenderingShadows && !ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
-            if (this.renderSectionManager instanceof SwappableRenderSectionManager) {
-                ((SwappableRenderSectionManager) this.renderSectionManager).iris$swapVisibilityState();
-            }
+	@Shadow(remap = false)
+	private double lastCameraX, lastCameraY, lastCameraZ, lastCameraPitch, lastCameraYaw;
 
-            wasRenderingShadows = false;
-        }
-    }
+	@Unique
+	private double iris$swapLastCameraX, iris$swapLastCameraY, iris$swapLastCameraZ,
+		iris$swapLastCameraPitch, iris$swapLastCameraYaw;
+
+	@Unique
+	private void swapCachedCameraPositions() {
+		double tmp;
+
+		tmp = lastCameraX;
+		lastCameraX = iris$swapLastCameraX;
+		iris$swapLastCameraX = tmp;
+
+		tmp = lastCameraY;
+		lastCameraY = iris$swapLastCameraY;
+		iris$swapLastCameraY = tmp;
+
+		tmp = lastCameraZ;
+		lastCameraZ = iris$swapLastCameraZ;
+		iris$swapLastCameraZ = tmp;
+
+		tmp = lastCameraPitch;
+		lastCameraPitch = iris$swapLastCameraPitch;
+		iris$swapLastCameraPitch = tmp;
+
+		tmp = lastCameraYaw;
+		lastCameraYaw = iris$swapLastCameraYaw;
+		iris$swapLastCameraYaw = tmp;
+	}
 
     @Unique
     private void iris$ensureStateSwapped() {
         if (!wasRenderingShadows && ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
-            if (this.renderSectionManager instanceof SwappableRenderSectionManager) {
-                ((SwappableRenderSectionManager) this.renderSectionManager).iris$swapVisibilityState();
-            }
+			if (this.renderSectionManager instanceof SwappableRenderSectionManager) {
+				((SwappableRenderSectionManager) this.renderSectionManager).iris$swapVisibilityState();
+				swapCachedCameraPositions();
+			}
 
             wasRenderingShadows = true;
-        }
+        } else if (wasRenderingShadows && !ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
+			if (this.renderSectionManager instanceof SwappableRenderSectionManager) {
+				((SwappableRenderSectionManager) this.renderSectionManager).iris$swapVisibilityState();
+				swapCachedCameraPositions();
+			}
+
+			wasRenderingShadows = false;
+		}
     }
 
-	@Inject(method = "updateChunks", remap = false, at = @At("RETURN"))
-	private void iris$captureVisibleBlockEntities(Camera camera, me.jellysquid.mods.sodium.client.util.frustum.Frustum frustum, int frame, boolean spectator, CallbackInfo ci) {
-		if (ShadowRenderingState.areShadowsCurrentlyBeingRendered()) {
-			ShadowRenderer.visibleBlockEntities.addAll(this.renderSectionManager.getVisibleBlockEntities());
-		}
-	}
-    
     @Inject(method = "scheduleTerrainUpdate()V", remap = false,
             at = @At(value = "INVOKE",
                     target = "me/jellysquid/mods/sodium/client/render/chunk/RenderSectionManager.markGraphDirty ()V",
@@ -104,6 +122,6 @@ public class MixinSodiumWorldRenderer {
     @Inject(method = "drawChunkLayer",  remap = false, at = @At("HEAD"))
     private void iris$beforeDrawChunkLayer(RenderType renderType, PoseStack poseStack, double x, double y,
 										   double z, CallbackInfo ci) {
-        iris$restoreStateIfShadowsWereBeingRendered();
+        iris$ensureStateSwapped();
     }
 }

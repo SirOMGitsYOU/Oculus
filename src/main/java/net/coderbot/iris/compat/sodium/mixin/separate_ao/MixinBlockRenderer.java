@@ -28,7 +28,7 @@ public class MixinBlockRenderer {
 
     @Inject(method = "renderModel", remap = false, at = @At("HEAD"))
     private void renderModel(BlockAndTintGetter world, BlockState state, BlockPos pos, BlockPos origin,
-							 BakedModel model, ChunkModelBuilder buffers, boolean cull, long seed, IModelData data,
+							 BakedModel model, ChunkModelBuilder buffers, boolean cull, long seed, IModelData modelData,
 							 CallbackInfoReturnable<Boolean> cir) {
         this.useSeparateAo = BlockRenderingSettings.INSTANCE.shouldUseSeparateAo();
     }
