@@ -11,6 +11,7 @@ import org.spongepowered.asm.mixin.Shadow;
 
 @Mixin(ShaderType.class)
 public class MixinShaderType {
+	@SuppressWarnings("target")
 	@Shadow(remap = false)
 	@Final
 	@Mutable

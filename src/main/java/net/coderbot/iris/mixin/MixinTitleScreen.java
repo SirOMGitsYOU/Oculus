@@ -5,9 +5,11 @@ import net.coderbot.iris.compat.sodium.SodiumVersionCheck;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.AlertScreen;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
-import net.minecraft.network.chat.TranslatableComponent;
+
+import net.minecraft.network.chat.Component;
 import net.minecraftforge.fml.loading.FMLLoader;
 
 import org.spongepowered.asm.mixin.Mixin;
@@ -35,6 +37,8 @@ public class MixinTitleScreen {
 		if (!Iris.isSodiumInstalled() && FMLLoader.isProduction()) {
 			reason = "iris.sodium.failure.reason.notFound";
 		} else {
+			Iris.onLoadingComplete();
+
 			return;
 		}
 
@@ -50,9 +54,9 @@ public class MixinTitleScreen {
 						Minecraft.getInstance().stop();
 					}
 				},
-				new TranslatableComponent("iris.sodium.failure.title").withStyle(ChatFormatting.RED),
-				new TranslatableComponent(reason),
-				new TranslatableComponent("iris.sodium.failure.download"),
-				new TranslatableComponent("menu.quit")));
+				Component.translatable("iris.sodium.failure.title").withStyle(ChatFormatting.RED),
+				Component.translatable(reason),
+				Component.translatable("iris.sodium.failure.download"),
+				Component.translatable("menu.quit")));
 	}
 }

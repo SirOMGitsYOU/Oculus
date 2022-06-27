@@ -74,6 +74,9 @@ public abstract class MixinBufferBuilder implements BufferVertexConsumer, BlockS
 
 	@Shadow
 	public abstract void putShort(int i, short s);
+	
+	@Shadow
+	protected abstract void ensureCapacity(int p_181670_1_);
 
 	@Unique
 	private boolean iris$shouldNotExtend = false;
@@ -134,6 +137,7 @@ public abstract class MixinBufferBuilder implements BufferVertexConsumer, BlockS
 			this.nextElement();
 		}
 
+		this.ensureCapacity(15);
 		this.putShort(0, currentBlock);
 		this.putShort(2, currentRenderType);
 		this.nextElement();

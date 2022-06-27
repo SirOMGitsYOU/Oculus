@@ -28,11 +28,11 @@ public class FullScreenQuadRenderer {
 		bufferBuilder.vertex(1.0F, 0.0F, 0.0F).uv(1.0F, 0.0F).endVertex();
 		bufferBuilder.vertex(1.0F, 1.0F, 0.0F).uv(1.0F, 1.0F).endVertex();
 		bufferBuilder.vertex(0.0F, 1.0F, 0.0F).uv(0.0F, 1.0F).endVertex();
-		bufferBuilder.end();
+		BufferBuilder.RenderedBuffer renderedBuffer = bufferBuilder.end();
 
 		quad = new VertexBuffer();
 		quad.bind();
-		quad.upload(bufferBuilder);
+		quad.upload(renderedBuffer);
 		VertexBuffer.unbind();
 	}
 
@@ -48,10 +48,12 @@ public class FullScreenQuadRenderer {
 		((VertexBufferHelper) quad).saveBinding();
 		RenderSystem.disableDepthTest();
 		BufferUploader.reset();
+		quad.bind();
+
 	}
 
 	public void renderQuad() {
-		quad.drawChunkLayer();
+		quad.draw();
 	}
 
 	public void end() {
@@ -63,7 +65,6 @@ public class FullScreenQuadRenderer {
 
 		RenderSystem.enableDepthTest();
 		VertexBuffer.unbind();
-		VertexBuffer.unbindVertexArray();
 		((VertexBufferHelper) quad).restoreBinding();
 	}
 }

@@ -19,7 +19,6 @@ import net.coderbot.iris.uniforms.CapturedRenderingState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceProvider;
 import org.jetbrains.annotations.Nullable;
 
@@ -218,16 +217,19 @@ public class ExtendedShader extends ShaderInstance implements SamplerHolder, Ima
 
 	@Override
 	public void iris$createGeometryShader(ResourceProvider factory, ResourceLocation name) throws IOException {
-		Resource geometry = factory.getResource(new ResourceLocation("minecraft", name.getPath() + "_geometry.gsh"));
-		if (geometry != null) {
-			this.geometry = Program.compileShader(IrisProgramTypes.GEOMETRY, name.getPath(), geometry.getInputStream(), geometry.getSourceName(), new GlslPreprocessor() {
-				@Nullable
-				@Override
-				public String applyImport(boolean bl, String string) {
-					return null;
-				}
-			});
-		}
+		 factory.getResource(new ResourceLocation("minecraft", name.getPath() + "_geometry.gsh")).ifPresent(geometry -> {
+			 try {
+				 this.geometry = Program.compileShader(IrisProgramTypes.GEOMETRY, name.getPath(), geometry.open(), geometry.sourcePackId(), new GlslPreprocessor() {
+					 @Nullable
+					 @Override
+					 public String applyImport(boolean bl, String string) {
+						 return null;
+					 }
+				 });
+			 } catch (IOException e) {
+				 e.printStackTrace();
+			 }
+		 });
 	}
 
 	public Program getGeometry() {
