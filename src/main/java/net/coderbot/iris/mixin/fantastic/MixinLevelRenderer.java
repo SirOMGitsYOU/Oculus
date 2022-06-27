@@ -2,13 +2,9 @@ package net.coderbot.iris.mixin.fantastic;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Matrix4f;
-import com.mojang.math.Vector3d;
-
 import net.coderbot.iris.Iris;
 import net.coderbot.iris.fantastic.ParticleRenderingPhase;
 import net.coderbot.iris.fantastic.PhasedParticleEngine;
-import net.coderbot.iris.layer.GbufferProgram;
-import net.coderbot.iris.layer.GbufferPrograms;
 import net.coderbot.iris.pipeline.WorldRenderingPipeline;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -38,22 +34,11 @@ public class MixinLevelRenderer {
 	@Shadow
 	@Final
 	private Minecraft minecraft;
-	
+
 	@Shadow
 	@Final
 	private RenderBuffers renderBuffers;
 
-	//FORGE
-	@Shadow
-	private Frustum capturedFrustum;
-	
-	@Shadow
-	private Frustum cullingFrustum;
-	
-	@Shadow
-	@Final
-	private Vector3d frustumPos;
-	
 	@Inject(method = "renderLevel", at = @At("HEAD"))
 	private void iris$resetParticleManagerPhase(PoseStack poseStack, float f, long l, boolean bl, Camera camera, GameRenderer gameRenderer, LightTexture lightTexture, Matrix4f projectionMatrix, CallbackInfo ci) {
 		((PhasedParticleEngine) minecraft.particleEngine).setParticleRenderingPhase(ParticleRenderingPhase.EVERYTHING);
@@ -63,31 +48,18 @@ public class MixinLevelRenderer {
 	private void iris$renderOpaqueParticles(PoseStack poseStack, float f, long l, boolean bl, Camera camera, GameRenderer gameRenderer, LightTexture lightTexture, Matrix4f projectionMatrix, CallbackInfo ci) {
 		minecraft.getProfiler().popPush("opaque_particles");
 
-		//  Forge shitty zone start
-		Frustum frustum;
-		boolean flag = this.capturedFrustum != null;
-		
-        if (flag) {
-        	frustum = this.capturedFrustum;
-        	frustum.prepare(this.frustumPos.x, this.frustumPos.y, this.frustumPos.z);
-        } else {
-        	frustum = this.cullingFrustum;
-        }
-        //  Forge shitty zone end
-		
 		MultiBufferSource.BufferSource bufferSource = renderBuffers.bufferSource();
 
 		((PhasedParticleEngine) minecraft.particleEngine).setParticleRenderingPhase(ParticleRenderingPhase.OPAQUE);
 
-		GbufferPrograms.push(GbufferProgram.TEXTURED_LIT);
-		minecraft.particleEngine.render(poseStack, bufferSource, lightTexture, camera, f, frustum);
+		minecraft.particleEngine.render(poseStack, bufferSource, lightTexture, camera, f);
 
 		((PhasedParticleEngine) minecraft.particleEngine).setParticleRenderingPhase(ParticleRenderingPhase.TRANSLUCENT);
+
 		if (Iris.getPipelineManager().getPipeline().map(WorldRenderingPipeline::shouldRenderParticlesBeforeDeferred).orElse(false)) {
 			// Render translucent particles here as well if the pack requests so
-			minecraft.particleEngine.render(poseStack, bufferSource, lightTexture, camera, f, frustum);
+			minecraft.particleEngine.render(poseStack, bufferSource, lightTexture, camera, f);
 		}
-		GbufferPrograms.pop(GbufferProgram.TEXTURED_LIT);
 	}
 
 	@Redirect(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/particle/ParticleEngine;render(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;Lnet/minecraft/client/renderer/LightTexture;Lnet/minecraft/client/Camera;FLnet/minecraft/client/renderer/culling/Frustum;)V"))

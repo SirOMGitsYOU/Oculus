@@ -3,15 +3,17 @@ package net.coderbot.iris.mixin;
 import com.google.common.collect.ImmutableSet;
 import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.vertex.VertexFormat;
-
+import net.coderbot.iris.Iris;
 import net.coderbot.iris.gl.IrisRenderSystem;
+import net.coderbot.iris.gl.blending.DepthColorStorage;
+import net.coderbot.iris.pipeline.WorldRenderingPipeline;
+import net.coderbot.iris.pipeline.newshader.CoreWorldRenderingPipeline;
 import net.coderbot.iris.pipeline.newshader.ExtendedShader;
 import net.coderbot.iris.pipeline.newshader.ShaderInstanceInterface;
 import net.coderbot.iris.pipeline.newshader.fallback.FallbackShader;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceProvider;
-
 import org.lwjgl.opengl.ARBTextureSwizzle;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30C;
@@ -93,10 +95,38 @@ public class MixinShaderInstance implements ShaderInstanceInterface {
 			Uniform.glBindAttribLocation(i, j, charSequence);
 		}
 	}
-	
+
+	@Inject(method = "apply", at = @At("TAIL"))
+	private void iris$lockDepthColorState(CallbackInfo ci) {
+		if (((Object) this) instanceof ExtendedShader || ((Object) this) instanceof FallbackShader || !shouldOverrideShaders()) {
+			return;
+		}
+
+		DepthColorStorage.disableDepthColor();
+	}
+
+	@Inject(method = "clear", at = @At("HEAD"))
+	private void iris$unlockDepthColorState(CallbackInfo ci) {
+		if (((Object) this) instanceof ExtendedShader || ((Object) this) instanceof FallbackShader || !shouldOverrideShaders()) {
+			return;
+		}
+
+		DepthColorStorage.unlockDepthColor();
+	}
+
+	private static boolean shouldOverrideShaders() {
+		WorldRenderingPipeline pipeline = Iris.getPipelineManager().getPipelineNullable();
+
+		if (pipeline instanceof CoreWorldRenderingPipeline) {
+			return ((CoreWorldRenderingPipeline) pipeline).shouldOverrideShaders();
+		} else {
+			return false;
+		}
+	}
+
 	@Inject(method = "<init>", at = @At(value = "RETURN"))
-	public void iris$setupGeometryShader(ResourceProvider resourceProvider, String name, VertexFormat vertexFormat, CallbackInfo ci) {
-		this.iris$createGeometryShader(resourceProvider, new ResourceLocation(name));
+	public void iris$setupGeometryShader(ResourceProvider resourceProvider, String string, VertexFormat vertexFormat, CallbackInfo ci) {
+		this.iris$createGeometryShader(resourceProvider, new ResourceLocation(string));
 	}
 	
 	@Inject(method = "<init>(Lnet/minecraft/server/packs/resources/ResourceProvider;Lnet/minecraft/resources/ResourceLocation;Lcom/mojang/blaze3d/vertex/VertexFormat;)V", at = @At(value = "RETURN"))

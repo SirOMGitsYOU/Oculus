@@ -5,7 +5,6 @@ import net.coderbot.iris.compat.sodium.SodiumVersionCheck;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.AlertScreen;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.TranslatableComponent;
@@ -21,24 +20,22 @@ import java.net.URISyntaxException;
 
 @Mixin(TitleScreen.class)
 public class MixinTitleScreen {
+	private static boolean iris$hasFirstInit;
+
 	@Inject(method = "init", at = @At("RETURN"))
 	public void iris$showSodiumIncompatScreen(CallbackInfo ci) {
+		if (iris$hasFirstInit) {
+			return;
+		}
+
+		iris$hasFirstInit = true;
+
 		String reason;
 
 		if (!Iris.isSodiumInstalled() && FMLLoader.isProduction()) {
 			reason = "iris.sodium.failure.reason.notFound";
-		} else if (Iris.isSodiumInvalid()) {
-			reason = "iris.sodium.failure.reason.incompatible";
 		} else {
 			return;
-		}
-
-		if (Iris.isSodiumInvalid()) {
-			Minecraft.getInstance().setScreen(new AlertScreen(
-					Minecraft.getInstance()::stop,
-					new TranslatableComponent("iris.sodium.failure.title").withStyle(ChatFormatting.RED),
-					new TranslatableComponent("iris.sodium.failure.reason"),
-					new TranslatableComponent("menu.quit")));
 		}
 
 		Minecraft.getInstance().setScreen(new ConfirmScreen(

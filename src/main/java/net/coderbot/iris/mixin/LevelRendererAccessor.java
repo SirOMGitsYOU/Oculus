@@ -2,7 +2,6 @@ package net.coderbot.iris.mixin;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Matrix4f;
-import it.unimi.dsi.fastutil.objects.ObjectList;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -38,4 +37,10 @@ public interface LevelRendererAccessor {
 
 	@Accessor("renderBuffers")
 	void setRenderBuffers(RenderBuffers buffers);
+
+	@Accessor("generateClouds")
+	boolean shouldRegenerateClouds();
+
+	@Accessor("generateClouds")
+	void setShouldRegenerateClouds(boolean shouldRegenerate);
 }

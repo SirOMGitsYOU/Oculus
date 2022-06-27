@@ -1,19 +1,18 @@
 package net.coderbot.iris.mixin;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-
-import net.coderbot.iris.layer.GbufferProgram;
-import net.coderbot.iris.layer.GbufferPrograms;
+import net.coderbot.iris.Iris;
 import net.coderbot.iris.pipeline.WorldRenderingPhase;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.minecraft.client.Camera;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.culling.Frustum;
+
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Ensures that all particles are rendered with the textured_lit shader program.
@@ -27,15 +26,13 @@ public class MixinParticleEngine {
 	private void iris$beginDrawingParticles(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource,
 											 LightTexture lightTexture, Camera camera, float f, Frustum frustum,
 											 CallbackInfo ci) {
-		GbufferPrograms.setPhase(WorldRenderingPhase.PARTICLES);
-		GbufferPrograms.push(GbufferProgram.TEXTURED_LIT);
+		Iris.getPipelineManager().getPipeline().ifPresent(pipeline -> pipeline.setPhase(WorldRenderingPhase.PARTICLES));
 	}
 
 	@Inject(method = RENDER, remap = false, at = @At("RETURN"))
 	private void iris$finishDrawingParticles(PoseStack poseStack, MultiBufferSource.BufferSource bufferSource,
 										LightTexture lightTexture, Camera camera, float f, Frustum frustum,
 										CallbackInfo ci) {
-		GbufferPrograms.setPhase(WorldRenderingPhase.NONE);
-		GbufferPrograms.pop(GbufferProgram.TEXTURED_LIT);
+		Iris.getPipelineManager().getPipeline().ifPresent(pipeline -> pipeline.setPhase(WorldRenderingPhase.NONE));
 	}
 }

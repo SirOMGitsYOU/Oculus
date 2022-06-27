@@ -15,9 +15,9 @@ import java.util.Set;
  * spamming the log if Sodium isn't present.
  */
 public class IrisSodiumCompatMixinPlugin implements IMixinConfigPlugin {
-
-	public static boolean isRubidiumLoaded;
 	
+	public static boolean isRubidiumLoaded;
+
 	@Override
 	public void onLoad(String mixinPackage) {
 		isRubidiumLoaded = FMLLoader.getLoadingModList().getModFileById("rubidium") != null;

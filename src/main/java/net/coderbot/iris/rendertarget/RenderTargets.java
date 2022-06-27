@@ -1,36 +1,42 @@
 package net.coderbot.iris.rendertarget;
 
 import com.google.common.collect.ImmutableSet;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.coderbot.iris.gl.IrisRenderSystem;
 import net.coderbot.iris.gl.framebuffer.GlFramebuffer;
+import net.coderbot.iris.gl.texture.DepthBufferFormat;
+import net.coderbot.iris.gl.texture.DepthCopyStrategy;
 import net.coderbot.iris.shaderpack.PackRenderTargetDirectives;
-import net.minecraft.client.Minecraft;
+import org.lwjgl.opengl.GL20C;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.IntSupplier;
 
 public class RenderTargets {
 	private final RenderTarget[] targets;
 	private int currentDepthTexture;
+	private DepthBufferFormat currentDepthFormat;
 
 	private final DepthTexture noTranslucents;
 	private final DepthTexture noHand;
+	private final GlFramebuffer depthSourceFb;
+	private final GlFramebuffer noTranslucentsDestFb;
+	private final GlFramebuffer noHandDestFb;
+	private DepthCopyStrategy copyStrategy;
 
 	private final List<GlFramebuffer> ownedFramebuffers;
 
 	private int cachedWidth;
 	private int cachedHeight;
 	private boolean fullClearRequired;
+	private boolean translucentDepthDirty;
+	private boolean handDepthDirty;
 
-	private boolean destroyed = false;
+	private int cachedDepthBufferVersion;
+	private boolean destroyed;
 
-	public RenderTargets(com.mojang.blaze3d.pipeline.RenderTarget reference, PackRenderTargetDirectives directives) {
-		// Do not use an IntSupplier to refer to the RenderTarget, it's not safe to assume the main target is always the same.
-		this(reference.width, reference.height, reference.getDepthTextureId(), directives.getRenderTargetSettings());
-	}
-
-	public RenderTargets(int width, int height, int depthTexture, Map<Integer, PackRenderTargetDirectives.RenderTargetSettings> renderTargets) {
+	public RenderTargets(int width, int height, int depthTexture, int depthBufferVersion, DepthBufferFormat depthFormat, Map<Integer, PackRenderTargetDirectives.RenderTargetSettings> renderTargets) {
 		targets = new RenderTarget[renderTargets.size()];
 
 		renderTargets.forEach((index, settings) -> {
@@ -41,18 +47,32 @@ public class RenderTargets {
 		});
 
 		this.currentDepthTexture = depthTexture;
-
-		this.noTranslucents = new DepthTexture(width, height);
-		this.noHand = new DepthTexture(width, height);
+		this.currentDepthFormat = depthFormat;
+		this.copyStrategy = DepthCopyStrategy.fastest(currentDepthFormat.isCombinedStencil());
 
 		this.cachedWidth = width;
 		this.cachedHeight = height;
+		this.cachedDepthBufferVersion = depthBufferVersion;
 
 		this.ownedFramebuffers = new ArrayList<>();
 
 		// NB: Make sure all buffers are cleared so that they don't contain undefined
 		// data. Otherwise very weird things can happen.
 		fullClearRequired = true;
+
+		this.depthSourceFb = createFramebufferWritingToMain(new int[] {0});
+
+		this.noTranslucents = new DepthTexture(width, height, currentDepthFormat);
+		this.noHand = new DepthTexture(width, height, currentDepthFormat);
+
+		this.noTranslucentsDestFb = createFramebufferWritingToMain(new int[] {0});
+		this.noTranslucentsDestFb.addDepthAttachment(this.noTranslucents.getTextureId());
+
+		this.noHandDestFb = createFramebufferWritingToMain(new int[] {0});
+		this.noHandDestFb.addDepthAttachment(this.noHand.getTextureId());
+
+		this.translucentDepthDirty = true;
+		this.handDepthDirty = true;
 	}
 
 	public void destroy() {
@@ -98,8 +118,24 @@ public class RenderTargets {
 		return noHand;
 	}
 
-	public void resizeIfNeeded(boolean recreateDepth, int newDepthTextureId, int newWidth, int newHeight) {
-		if (recreateDepth || newDepthTextureId != currentDepthTexture) {
+	public void resizeIfNeeded(int newDepthBufferVersion, int newDepthTextureId, int newWidth, int newHeight, DepthBufferFormat newDepthFormat) {
+		boolean recreateDepth = false;
+		if (cachedDepthBufferVersion != newDepthBufferVersion) {
+			recreateDepth = true;
+			currentDepthTexture = newDepthTextureId;
+			cachedDepthBufferVersion = newDepthBufferVersion;
+		}
+
+		boolean sizeChanged = newWidth != cachedWidth || newHeight != cachedHeight;
+		boolean depthFormatChanged = newDepthFormat != currentDepthFormat;
+
+		if (depthFormatChanged) {
+			currentDepthFormat = newDepthFormat;
+			// Might need a new copy strategy
+			copyStrategy = DepthCopyStrategy.fastest(currentDepthFormat.isCombinedStencil());
+		}
+
+		if (recreateDepth) {
 			// Re-attach the depth textures with the new depth texture ID, since Minecraft re-creates
 			// the depth texture when resizing its render targets.
 			//
@@ -107,29 +143,59 @@ public class RenderTargets {
 			// could be a concern, in the case of resizing and similar. I think it should work
 			// based on what I've seen of the spec, though - it seems like deleting a texture
 			// automatically detaches it from its framebuffers.
-			currentDepthTexture = newDepthTextureId;
-
 			for (GlFramebuffer framebuffer : ownedFramebuffers) {
+				if (framebuffer == noHandDestFb || framebuffer == noTranslucentsDestFb) {
+					// NB: Do not change the depth attachment of these framebuffers
+					// as it is intentionally different
+					continue;
+				}
+
 				framebuffer.addDepthAttachment(newDepthTextureId);
 			}
 		}
 
-		if (newWidth == cachedWidth && newHeight == cachedHeight) {
-			// No resize needed
-			return;
+		if (depthFormatChanged || sizeChanged)  {
+			// Reallocate depth buffers
+			noTranslucents.resize(newWidth, newHeight, newDepthFormat);
+			noHand.resize(newWidth, newHeight, newDepthFormat);
+			this.translucentDepthDirty = true;
+			this.handDepthDirty = true;
 		}
 
-		cachedWidth = newWidth;
-		cachedHeight = newHeight;
+		if (sizeChanged) {
+			cachedWidth = newWidth;
+			cachedHeight = newHeight;
 
-		for (RenderTarget target : targets) {
-			target.resize(newWidth, newHeight);
+			for (RenderTarget target : targets) {
+				target.resize(newWidth, newHeight);
+			}
+
+			fullClearRequired = true;
 		}
+	}
 
-		noTranslucents.resize(newWidth, newHeight);
-		noHand.resize(newWidth, newHeight);
+	public void copyPreTranslucentDepth() {
+		if (translucentDepthDirty) {
+			translucentDepthDirty = false;
+			RenderSystem.bindTexture(noTranslucents.getTextureId());
+			depthSourceFb.bindAsReadBuffer();
+			IrisRenderSystem.copyTexImage2D(GL20C.GL_TEXTURE_2D, 0, currentDepthFormat.getGlInternalFormat(), 0, 0, cachedWidth, cachedHeight, 0);
+		} else {
+			copyStrategy.copy(depthSourceFb, getDepthTexture(), noTranslucentsDestFb, noTranslucents.getTextureId(),
+				getCurrentWidth(), getCurrentHeight());
+		}
+	}
 
-		fullClearRequired = true;
+	public void copyPreHandDepth() {
+		if (handDepthDirty) {
+			handDepthDirty = false;
+			RenderSystem.bindTexture(noHand.getTextureId());
+			depthSourceFb.bindAsReadBuffer();
+			IrisRenderSystem.copyTexImage2D(GL20C.GL_TEXTURE_2D, 0, currentDepthFormat.getGlInternalFormat(), 0, 0, cachedWidth, cachedHeight, 0);
+		} else {
+			copyStrategy.copy(depthSourceFb, getDepthTexture(), noHandDestFb, noHand.getTextureId(),
+				getCurrentWidth(), getCurrentHeight());
+		}
 	}
 
 	public boolean isFullClearRequired() {
