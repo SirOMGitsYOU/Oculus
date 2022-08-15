@@ -3,7 +3,7 @@ loaderVersion="[39,)"
 license="LGPL-3.0-only"
 [[mods]]
 modId="oculus"
-version="1.2.5"
+version="1.2.5b"
 displayName="Oculus"
 logoFile="oculus-logo.png"
 authors="coderbot, IMS212, Justsnoopy30, FoundationGames"

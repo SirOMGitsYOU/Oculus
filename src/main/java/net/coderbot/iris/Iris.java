@@ -27,6 +27,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.chat.TranslatableComponent;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraftforge.client.ClientRegistry;
+import net.minecraftforge.common.ForgeConfig;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
@@ -135,6 +136,8 @@ public class Iris {
 		ClientRegistry.registerKeyBinding(reloadKeybind);
 		ClientRegistry.registerKeyBinding(toggleShadersKeybind);
 		ClientRegistry.registerKeyBinding(shaderpackScreenKeybind);
+		
+		ForgeConfig.CLIENT.experimentalForgeLightPipelineEnabled.set(false);
 	}
 
 	private void setupCommands(Minecraft instance) {
